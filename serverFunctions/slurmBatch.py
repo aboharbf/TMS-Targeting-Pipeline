@@ -1,33 +1,15 @@
 """
-Generate a Slurm array job script to run all .sh files in the slurm/ folder.
-Generate a Slurm batch script to run all .sh files as an array job.
-
-Parameters:
------------
-slurm_dir : str
-    Directory containing the .sh job files
-output_file : str
-    Name of the output batch script
-job_name : str
-    Name for the Slurm job
-time_limit : str
-    Time limit per job (format: HH:MM:SS)
-memory : str
-    Memory per job (e.g., "4G", "2000M")
-cpus_per_task : int
-    Number of CPUs per task
+Generate a Slurm array job script to run all .sh files in the slurm/ folder as an array job.
 """
 
-import os
-import glob
 from pathlib import Path
 
-slurm_dir=Path("~/pipeline/slurm").expanduser()
-output_file="run_all_jobs.sh"
 job_name="pipeline"
-time_limit="01:00:00"
-memory="8G"
-cpus_per_task=1
+slurm_dir=Path("~/pipeline/slurm").expanduser() # Directory containing the .sh job files
+output_file="run_all_jobs.sh"  # Name of the output batch script, placed in current dir
+time_limit="01:00:00"          # Time limit per job (format: HH:MM:SS)
+memory="8G"                    # Memory per job (e.g., "4G", "2000M")
+cpus_per_task=1                # Number of CPUs per task
 
 # Get all .sh files in the directory
 slurm_path = Path(slurm_dir)
@@ -52,7 +34,7 @@ batch_script = f"""#!/bin/bash
 #SBATCH --array=0-{num_jobs - 1}
 #SBATCH --time={time_limit}
 #SBATCH --mem={memory}
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task={cpus_per_task}
 #SBATCH --output=logs/{job_name}_%A_%a.out
 #SBATCH --error=logs/{job_name}_%A_%a.err
 
