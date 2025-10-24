@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3.2 (091e20e, 2023-11-25, custom)"
+   sodipodi:docname="SchematicDrawing.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="2.0257997"
+     inkscape:cx="259.89737"
+     inkscape:cy="74.29165"
+     inkscape:window-width="2560"
+     inkscape:window-height="1351"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1">
+    <rect
+       x="26.65614"
+       y="30.605198"
+       width="326.78453"
+       height="68.121247"
+       id="rect1" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text1"
+       style="font-size:16px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;white-space:pre;shape-inside:url(#rect1)" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="6.3997359"
+       y="8.2282314"
+       id="text2"><tspan
+         sodipodi:role="line"
+         id="tspan2"
+         style="stroke-width:0.264583"
+         x="6.3997359"
+         y="8.2282314">Figure 1</tspan></text>
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect2"
+       width="70.00528"
+       height="38.790234"
+       x="6.6609497"
+       y="14.758574" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="6.5303431"
+       y="13.583114"
+       id="text3"><tspan
+         sodipodi:role="line"
+         id="tspan3"
+         style="stroke-width:0.264583"
+         x="6.5303431"
+         y="13.583114">A.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="86.46685"
+       y="12.826088"
+       id="text3-3"><tspan
+         sodipodi:role="line"
+         id="tspan3-6"
+         style="stroke-width:0.264583"
+         x="86.46685"
+         y="12.826088">A.</tspan></text>
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect3"
+       width="70.13588"
+       height="35.916885"
+       x="6.6609497"
+       y="60.470974" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="6.8171549"
+       y="59.12817"
+       id="text3-7"><tspan
+         sodipodi:role="line"
+         id="tspan3-1"
+         style="stroke-width:0.264583"
+         x="6.8171549"
+         y="59.12817">B.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="87.868393"
+       y="59.024517"
+       id="text3-7-6"><tspan
+         sodipodi:role="line"
+         id="tspan3-1-7"
+         style="stroke-width:0.264583"
+         x="87.868393"
+         y="59.024517">B.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="116.50647"
+       y="59.252037"
+       id="text3-7-8"><tspan
+         sodipodi:role="line"
+         id="tspan3-1-1"
+         style="stroke-width:0.264583"
+         x="116.50647"
+         y="59.252037">C.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="27.949869"
+       y="34.480209"
+       id="text4"><tspan
+         sodipodi:role="line"
+         id="tspan4"
+         style="stroke-width:0.264583"
+         x="27.949869"
+         y="34.480209">Schematic</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="26.905014"
+       y="79.408966"
+       id="text5"><tspan
+         sodipodi:role="line"
+         id="tspan5"
+         style="stroke-width:0.264583"
+         x="26.905014"
+         y="79.408966">Analysis Design</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="85.286285"
+       y="7.444591"
+       id="text6"><tspan
+         sodipodi:role="line"
+         id="tspan6"
+         style="stroke-width:0.264583"
+         x="85.286285"
+         y="7.444591">Figure 2</tspan></text>
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect6"
+       width="80.062004"
+       height="39.312664"
+       x="85.939308"
+       y="14.366755" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect7"
+       width="81.106865"
+       height="35.263851"
+       x="85.939308"
+       y="60.34037" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1.12716;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect8"
+       width="23.643286"
+       height="10.843813"
+       x="87.961998"
+       y="62.49366" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect9"
+       width="23.770449"
+       height="8.358839"
+       x="87.833115"
+       y="73.205147" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1.07241;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect10"
+       width="23.436825"
+       height="10.245533"
+       x="87.999916"
+       y="81.665489" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:0.583363;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path16-0-5"
+       cx="99.798805"
+       cy="86.928818"
+       rx="2.1021173"
+       ry="1.6776451" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1.06916;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect11"
+       width="23.04826"
+       height="28.01132"
+       x="115.81756"
+       y="63.444206" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1.01376;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect12"
+       width="22.450623"
+       height="28.001417"
+       x="140.14803"
+       y="63.416515" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect13"
+       width="33.435356"
+       height="28.864115"
+       x="88.420845"
+       y="19.852242" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect14"
+       width="34.08839"
+       height="27.688654"
+       x="127.4723"
+       y="20.766491" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path14"
+       cx="105.07322"
+       cy="36.635223"
+       rx="13.51781"
+       ry="9.7302113" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path15"
+       cx="104.09367"
+       cy="30.692612"
+       rx="5.4854879"
+       ry="3.3957784" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path16"
+       cx="114.54221"
+       cy="34.676121"
+       rx="3.5263851"
+       ry="2.9386542" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:0.975619;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path16-0"
+       cx="99.730148"
+       cy="67.730309"
+       rx="3.342665"
+       ry="2.9508445" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1.37286;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path16-0-0"
+       cx="99.594879"
+       cy="77.821548"
+       rx="5.2337556"
+       ry="3.7317772" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path17"
+       cx="95.604218"
+       cy="36.308708"
+       rx="4.3100262"
+       ry="3.0039577" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path18"
+       cx="143.27571"
+       cy="35.394459"
+       rx="13.060686"
+       ry="8.6200523" />
+    <ellipse
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="path19"
+       cx="147.84697"
+       cy="40.422821"
+       rx="3.5263851"
+       ry="2.9386542" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="89.951813"
+       y="18.193539"
+       id="text19"><tspan
+         sodipodi:role="line"
+         id="tspan19"
+         style="stroke-width:0.264583"
+         x="89.951813"
+         y="18.193539">Network</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="128.37067"
+       y="19.117069"
+       id="text20"><tspan
+         sodipodi:role="line"
+         id="tspan20"
+         style="stroke-width:0.264583"
+         x="128.37067"
+         y="19.117069">seed</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="7.3139844"
+       y="103.96306"
+       id="text21"><tspan
+         sodipodi:role="line"
+         id="tspan21"
+         style="stroke-width:0.264583"
+         x="7.3139844"
+         y="103.96306">Figure 3</tspan></text>
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect21"
+       width="70.13588"
+       height="26.513191"
+       x="7.5751977"
+       y="106.5752" />
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect22"
+       width="69.482849"
+       height="26.251978"
+       x="8.2282324"
+       y="136.74538" />
+    <text
+       xml:space="preserve"
+       style="font-size:2.82222px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="8.8812666"
+       y="111.01582"
+       id="text22"><tspan
+         sodipodi:role="line"
+         id="tspan22"
+         style="font-size:2.82222px;stroke-width:0.264583"
+         x="8.8812666"
+         y="111.01582">Example subject - visualized 4 points of spread</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:2.82223px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="9.0118723"
+       y="115.19524"
+       id="text23"><tspan
+         sodipodi:role="line"
+         id="tspan23"
+         style="stroke-width:0.264583"
+         x="9.0118723"
+         y="115.19524">Sphere overlapping to show the possible spread.</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:2.82223px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="10.448548"
+       y="140.66359"
+       id="text24"><tspan
+         sodipodi:role="line"
+         id="tspan24"
+         style="stroke-width:0.264583"
+         x="10.448548"
+         y="140.66359">Centroids from all the subjects on brain</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23333px;line-height:1.25;font-family:Helvetica;-inkscape-font-specification:Helvetica;stroke-width:0.264583"
+       x="85.286278"
+       y="104.09367"
+       id="text25"><tspan
+         sodipodi:role="line"
+         id="tspan25"
+         style="stroke-width:0.264583"
+         x="85.286278"
+         y="104.09367">Figure 4 - Results</tspan></text>
+    <rect
+       style="opacity:0.71;fill:#ffffff;stroke:#000000;stroke-width:1;stroke-miterlimit:5;paint-order:markers fill stroke"
+       id="rect25"
+       width="81.49868"
+       height="25.860159"
+       x="85.286285"
+       y="106.7058" />
+  </g>
+</svg>
