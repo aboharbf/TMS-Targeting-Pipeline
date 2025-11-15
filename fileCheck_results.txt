@@ -1,0 +1,22 @@
+
+ Checking for se 
+
+/cbica/projects/nbthetaconn/nbthetaconn/data/083/ses-03/083.results.task-rest-mni.se/errts.083.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/088/ses-03/088.results.task-rest-mni.se/errts.088.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/099/ses-01/099.results.task-rest-mni.se/errts.099.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/099/ses-02/099.results.task-rest-mni.se/errts.099.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/099/ses-03/099.results.task-rest-mni.se/errts.099.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/099/ses-04/099.results.task-rest-mni.se/errts.099.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/100/ses-01/100.results.task-rest-mni.se/errts.100.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/100/ses-02/100.results.task-rest-mni.se/errts.100.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/100/ses-03/100.results.task-rest-mni.se/errts.100.tproject+tlrc.BRIK does not exist
+/cbica/projects/nbthetaconn/nbthetaconn/data/100/ses-04/100.results.task-rest-mni.se/errts.100.tproject+tlrc.BRIK does not exist
+
+ Checking for me 
+
+
+ Checking for se_e2 
+
+/cbica/projects/nbthetaconn/nbthetaconn/data/001/ses-01/001.results.task-rest-mni.se_e2/errts.001.tproject+tlrc.BRIK.gz dose not exist 
+/cbica/projects/nbthetaconn/nbthetaconn/data/034/ses-03/034.results.task-rest-mni.se_e2/errts.034.tproject+tlrc.BRIK.gz dose not exist 
+/cbica/projects/nbthetaconn/nbthetaconn/data/083/ses-03/083.results.task-rest-mni.se_e2/errts.083.tproject+tlrc.BRIK.gz dose not exist 
