@@ -13,9 +13,10 @@ A pipeline which takes in preprocessed fMRI files and compares coordinate reliab
 
 ## post-server visualization
 - the **main.ipynb** function, a Jupyter notebook intended to load the .csv file, convert to a pandas dataframe, and perform a 1-way ANOVA across specified groups (sgACC seed vs network, dlPFC mask orig, erode_1, dilate_5, and se vs me vs me-ica sequence).
-- run in Python 3.12 environement with Jupyter kernal + standard packages (listed below)
+- run in Python 3.12 environment with Jupyter kernel + standard packages (listed below)
 
 ### To install
-- Install virtual environment manager like anaconda
-    - Use 'conda env create -f environment.yml' with the environment yaml file present in the directory.
-    - Alternative: Use pip install -r requirements.txt, with the included file.
+- Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Run `uv sync` to create the virtual environment and install all dependencies
+- Run `uv run python -m ipykernel install --user --name tms-pipeline --display-name "TMS Pipeline"` to register the Jupyter kernel
+- Select the "TMS Pipeline" kernel in VS Code or Jupyter when running main.ipynb
