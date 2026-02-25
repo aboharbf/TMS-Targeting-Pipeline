@@ -3,7 +3,27 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(cd:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -c \"import ipykernel; print\\(ipykernel.__version__\\)\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -c \"import jupyter_client; print\\(jupyter_client.__version__\\)\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -m ipykernel_launcher --version 2>&1)",
+      "Bash(true:*)",
+      "Bash(taskkill:*)",
+      "Bash(grep:*)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -m pip list 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && timeout 10 .venv/Scripts/python.exe -c \"\nimport asyncio\nimport sys\n\n# Check the event loop policy\npolicy = asyncio.get_event_loop_policy\\(\\)\nprint\\(f'Event loop policy: {type\\(policy\\).__name__}'\\)\nprint\\(f'Python: {sys.version}'\\)\nprint\\(f'Platform: {sys.platform}'\\)\n\n# Try creating and running a loop\nloop = asyncio.new_event_loop\\(\\)\nprint\\(f'Event loop type: {type\\(loop\\).__name__}'\\)\nloop.close\\(\\)\n\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv --version 2>&1)",
+      "Bash(jupyter kernelspec:*)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv sync --dry-run 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -c \"\nimport numpy, pandas, scipy, matplotlib, seaborn, sklearn, statsmodels\nimport nibabel, nilearn, lxml, requests, patsy, ptitprince, PIL\nprint\\('All imports OK'\\)\n\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -c \"import numpy; print\\('numpy OK'\\)\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && .venv/Scripts/python.exe -c \"import pandas; print\\('pandas OK'\\)\" 2>&1 && .venv/Scripts/python.exe -c \"import scipy; print\\('scipy OK'\\)\" 2>&1 && .venv/Scripts/python.exe -c \"import matplotlib; print\\('matplotlib OK'\\)\" 2>&1 && .venv/Scripts/python.exe -c \"import nibabel; print\\('nibabel OK'\\)\" 2>&1 && .venv/Scripts/python.exe -c \"import nilearn; print\\('nilearn OK'\\)\" 2>&1 && .venv/Scripts/python.exe -c \"import ptitprince; print\\('ptitprince OK'\\)\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -c \"import sys; print\\(sys.executable\\)\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -m ipykernel install --user --name tms-targeting-pipeline --display-name \"TMS Targeting Pipeline\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -c \"\nimport json\nwith open\\('main.ipynb', 'r'\\) as f:\n    nb = json.load\\(f\\)\nprint\\(json.dumps\\(nb.get\\('metadata', {}\\), indent=2\\)\\)\n\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -c \"\nimport json\nwith open\\('main.ipynb', 'r'\\) as f:\n    nb = json.load\\(f\\)\n\nnb['metadata']['kernelspec'] = {\n    'display_name': 'TMS Targeting Pipeline',\n    'language': 'python',\n    'name': 'tms-targeting-pipeline'\n}\n\nwith open\\('main.ipynb', 'w', newline='\\\\n'\\) as f:\n    json.dump\\(nb, f, indent=1\\)\n\nprint\\('Updated notebook kernelspec metadata'\\)\n\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -c \"\nimport json\nwith open\\('main.ipynb', 'r'\\) as f:\n    nb = json.load\\(f\\)\nprint\\(json.dumps\\(nb['metadata']['kernelspec'], indent=2\\)\\)\n\" 2>&1)",
+      "Bash(cd /c/OneDrive/Research/TMS-Targeting-Pipeline && uv run python -c \"\nimport numpy, pandas, scipy, matplotlib, seaborn, sklearn, statsmodels\nimport nibabel, nilearn, lxml, requests, patsy, ptitprince, PIL\nimport ipykernel\nprint\\('All direct dependencies import OK'\\)\nprint\\(f'  numpy {numpy.__version__}'\\)\nprint\\(f'  pandas {pandas.__version__}'\\)\nprint\\(f'  ipykernel {ipykernel.__version__}'\\)\n\" 2>&1)"
     ]
   }
 }
