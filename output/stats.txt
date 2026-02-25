@@ -1,0 +1,62 @@
+Statistical Results Summary
+N subjects: 81
+==========================================================================================
+
+Variable: Sequence Type (sequence_type)
+Groups: ['se_e2', 'se', 'me']
+Test: Repeated Measures ANOVA
+F = 10.3337, p = 6.01e-05
+
+Post-hoc Paired t-tests (Bonferroni corrected, k=3):
+
+Group descriptives:
+  se_e2       : mean=15.359, SD=2.533, n=81
+  se          : mean=14.031, SD=2.722, n=81
+  me          : mean=13.880, SD=3.138, n=81
+
+Pairwise comparisons:
+  Comparison              mean_diff    SD_diff          t        p_raw       p_corr   sig
+  -------------------------------------------------------------------------------------
+     se_e2 vs se              1.328      2.689      4.445     2.80e-05     8.41e-05     *
+     se_e2 vs me              1.479      3.256      4.089     1.03e-04     3.08e-04     *
+        se vs me              0.152      3.650      0.374     7.10e-01     1.00e+00      
+
+==========================================================================================
+
+Variable: sgACC mask (target)
+Groups: ['seed', 'network']
+Test: Paired t-test
+t = 7.4434, p = 9.86e-11
+
+Group descriptives:
+  seed        : mean=16.148, SD=2.074, n=81
+  network     : mean=12.699, SD=3.641, n=81
+
+Pairwise comparisons:
+  Comparison              mean_diff    SD_diff          t        p_raw       p_corr   sig
+  -------------------------------------------------------------------------------------
+      seed vs network         3.450      4.171      7.443     9.86e-11     9.86e-11     *
+
+==========================================================================================
+
+Variable: dlPFC mask (clustMask)
+Groups: ['erode_1', 'orig', 'dilate_5']
+Test: Repeated Measures ANOVA
+F = 375.2058, p = 3.90e-61
+
+Post-hoc Paired t-tests (Bonferroni corrected, k=3):
+
+Group descriptives:
+  erode_1     : mean=8.734, SD=1.571, n=81
+  orig        : mean=12.970, SD=2.401, n=81
+  dilate_5    : mean=21.566, SD=4.849, n=81
+
+Pairwise comparisons:
+  Comparison              mean_diff    SD_diff          t        p_raw       p_corr   sig
+  -------------------------------------------------------------------------------------
+   erode_1 vs orig           -4.236      2.448    -15.572     6.19e-26     1.86e-25     *
+   erode_1 vs dilate_5      -12.832      4.871    -23.708     6.27e-38     1.88e-37     *
+      orig vs dilate_5       -8.596      5.065    -15.276     1.97e-25     5.91e-25     *
+
+==========================================================================================
+
