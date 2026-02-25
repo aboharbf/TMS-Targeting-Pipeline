@@ -12,7 +12,7 @@ A pipeline which takes in preprocessed fMRI files and compares coordinate reliab
 - **utils.py** - a script containing utility functions used in other scripts.
 
 ## Post-server visualization
-- the **main.ipynb** function, a Jupyter notebook intended to load the .csv file, convert to a pandas dataframe, and perform a 1-way ANOVA across specified groups (sgACC seed vs network, dlPFC mask orig, erode_1, dilate_5, and se vs me vs me-ica sequence).
+- the **main.ipynb** function, a Jupyter notebook intended to load the .csv file, convert to a pandas dataframe, and perform a statistical tests across specified groups (sgACC seed vs network, dlPFC mask orig, erode_1, dilate_5, and se vs me vs me-ica sequence).
 - Requires Python 3.12. All dependencies are defined in `pyproject.toml` and locked in `uv.lock`.
 
 ### To install
