@@ -1,6 +1,8 @@
 Statistical Results Summary
 N subjects: 81
 ==========================================================================================
+SEPARATE ONE-WAY ANALYSES
+==========================================================================================
 
 Variable: Sequence Type (sequence_type)
 Groups: ['se_e2', 'se', 'me']
@@ -59,4 +61,23 @@ Pairwise comparisons:
       orig vs dilate_5       -8.596      5.065    -15.276     1.97e-25     5.91e-25     *
 
 ==========================================================================================
+3-WAY REPEATED MEASURES ANOVA (sequence_type x target x clustMask)
+==========================================================================================
 
+                                   F Value  Num DF  Den DF        Pr > F
+sequence_type                    10.333657     2.0   160.0  6.014945e-05
+target                           55.404670     1.0    80.0  9.862586e-11
+clustMask                       375.205829     2.0   160.0  3.895595e-61
+sequence_type:target              0.152650     2.0   160.0  8.585547e-01
+sequence_type:clustMask           3.482107     4.0   320.0  8.403504e-03
+target:clustMask                  9.979155     2.0   160.0  8.238465e-05
+sequence_type:target:clustMask    0.854111     4.0   320.0  4.918605e-01
+
+Significant effects (p < 0.05):
+  sequence_type: F=10.3337, p=6.01e-05
+  target: F=55.4047, p=9.86e-11
+  clustMask: F=375.2058, p=3.90e-61
+  sequence_type:clustMask: F=3.4821, p=8.40e-03
+  target:clustMask: F=9.9792, p=8.24e-05
+
+==========================================================================================
