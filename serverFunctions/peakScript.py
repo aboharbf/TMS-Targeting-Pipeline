@@ -1,13 +1,4 @@
 # This is a Python script which will mainly function to allow for the efficient generation of bash commands
-# To-Do List
-# - introduce intermediate commands which can generate .pngs to visualize results - Andy's Brain book fMRI tutorial seems to have good visualization info
-# - Create function which can store 1d outputs as a csv cell, appropriately tagged with metadata/switches/variables from the loop executed to allow for proper averaging.
-# - Create distinct script which looks into csv files, generates avg/std across different parameter sets for each subject.
-
-# next task
-# - Test run up until end, examine fxn with the pipes not included, figure out ideal method for data extraction.
-# - Test run on 001, do additional test run with masked corr rather than whole brain, do additional one with 3dClusterize.
-# - consider ideal output for .1d
 
 import os
 import subprocess

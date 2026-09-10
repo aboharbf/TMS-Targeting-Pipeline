@@ -76,7 +76,10 @@ class slurmScriptLogger:
         script_path (str): Full path to the script file
     """
     
-    def __init__(self, subject_number, session, task, sequence, script_dir):
+    def __init__(self, subject_number, session, task, sequence, script_dir,
+                 cpus_per_task=1, mem="16G", time="24:00:00",
+                 job_prefix="plu", file_prefix="slurm_job",
+                 description="Automated Cluster detection pipeline"):
         """
         Initialize the SlurmScriptLogger.
         
@@ -86,14 +89,25 @@ class slurmScriptLogger:
             task (str): Task identifier
             sequence (str): Sequence identifier
             script_dir (str): Directory where scripts will be stored
+            cpus_per_task (int): --cpus-per-task for the SBATCH header
+            mem (str): --mem for the SBATCH header (total, not per-cpu)
+            time (str): --time for the SBATCH header, HH:MM:SS
+            job_prefix (str): prepended to the subject number for --job-name
+            file_prefix (str): prepended to the script filename
+            description (str): free text written into the script header
         """
         self.subject_number = subject_number
         self.session = session
         self.task = task
         self.sequence = sequence
+        self.cpus_per_task = cpus_per_task
+        self.mem = mem
+        self.time = time
+        self.job_prefix = job_prefix
+        self.description = description
         self.script_id = f"{subject_number}.{session}.{task}.{sequence}"
         self.script_dir = script_dir
-        self.script_filename = f"slurm_job-{self.script_id}.sh"
+        self.script_filename = f"{file_prefix}-{self.script_id}.sh"
         self.script_path = os.path.join(script_dir, self.script_filename)
         
         # Ensure directory exists
@@ -114,15 +128,16 @@ class slurmScriptLogger:
 
         info_str = f"Subject.Session.Task.Sequence - {self.script_id}"
         header = f"""#!/bin/bash
-#SBATCH --job-name=plu{self.subject_number}
+#SBATCH --job-name={self.job_prefix}{self.subject_number}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=24:00:00
-#SBATCH --mem=16G
+#SBATCH --cpus-per-task={self.cpus_per_task}
+#SBATCH --time={self.time}
+#SBATCH --mem={self.mem}
 #SBATCH --output=job_%j.out
 #SBATCH --error=job_%j.err
 ## Script Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-## Description: Automated Cluster detection pipeline for {info_str}
+## Description: {self.description} for {info_str}
 ## Author: Farid Aboharb, Balderston Lab
 
 """
