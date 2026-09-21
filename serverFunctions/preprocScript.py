@@ -15,6 +15,7 @@ slurmScriptDir = f'{projDir}/pipeline/slurm_preproc'
 task = 'rest'
 seqType = 'me'                          # names the results dir and the job file
 sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
+jobPrefix = 'prep'                      # prepended to the subject for --job-name
 
 jobs = 16                               # -jobs for 3dDeconvolve, and --cpus-per-task
 memPerJob = '16G'                       # TOTAL memory. 
@@ -23,18 +24,7 @@ timePerJob = '24:00:00'
 tlrcBase = 'MNI152_2009_template.nii.gz'
 firstTRs = 4
 
-dryRun = False                          # True = report only, write nothing
-
-
-def posixGlob(pattern):
-    """
-    sorted(glob.glob(...)) with separators normalised. sorted() reproduces the
-    ordering `ls` gave the csh, which matters because the echo times must line
-    up with the echo datasets. The separator fix only bites if the generator is
-    run from Windows for a dry run; on the server the paths are POSIX already.
-    """
-    return [path.replace(os.sep, '/') for path in sorted(glob.glob(pattern))]
-
+dryRun = False                          # True = report only, make sure all the req'd files are present. 
 
 # ------------------------------------------------------------------- subjects
 subjVec = [item for item in os.listdir(dataDir)
@@ -42,63 +32,10 @@ subjVec = [item for item in os.listdir(dataDir)
 subjVec.sort(key=lambda x: int(x))
 
 # As a test, just do the first few
-# subjVec = subjVec[0:3]
+subjVec = subjVec[0:1]
 
 print(f"Preparing scripts on following subjects: {subjVec}")
 print(f"Total subject count: {len(subjVec)}")
-
-
-def buildAfniProcCmd(subj, ses, codeDir, outDir, t1, run1epi, run2epi, echoTimes):
-    """
-    Assemble the afni_proc.py call for one subject/session as a single
-    backslash-continued string. Every path is absolute, so the emitted script
-    needs no shell variables of its own.
-    """
-    opts = [
-        "afni_proc.py",
-        f"-script {codeDir}/proc.{subj}.ses-{ses}.{task}.csh",
-        "-scr_overwrite",
-        f"-subj_id {subj}",
-        f"-out_dir {outDir}",
-        "-blocks despike tshift align tlrc volreg mask combine blur scale regress",
-        "-radial_correlate_blocks tcat volreg",
-        "-anat_has_skull yes",
-        f"-tcat_remove_first_trs {firstTRs}",
-        "-align_opts_aea -cost lpc+ZZ -giant_move -check_flip",
-        f"-tlrc_base {tlrcBase}",
-        "-tlrc_NL_warp",
-        f"-copy_anat {t1}",
-        "-volreg_align_to MIN_OUTLIER",
-        "-volreg_align_e2a",
-        "-volreg_tlrc_warp",
-        "-mask_epi_anat yes",
-        f"-dsets_me_run {' '.join(run1epi)}",
-        f"-dsets_me_run {' '.join(run2epi)}",
-        f"-echo_times {' '.join(echoTimes)}",
-        "-combine_method m_tedana",
-        "-reg_echo 2",
-        "-blur_in_mask yes",
-        "-blur_size 4",
-        "-mask_segment_anat yes",
-        "-mask_segment_erode yes",
-        "-regress_motion_per_run",
-        "-regress_apply_mot_types demean deriv",
-        "-regress_ROI_PC WMe 1",
-        "-regress_ROI_PC CSFe 1",
-        "-regress_ROI_PC brain 1",
-        "-regress_censor_motion 0.3",
-        "-regress_censor_outliers 0.15",
-        "-regress_apply_mask",
-        "-regress_run_clustsim no",
-        "-regress_opts_3dD -GOFORIT 10",
-        f"-jobs {jobs}",
-        "-regress_est_blur_epits",
-        "-regress_est_blur_errts",
-        "-test_stim_files no",
-        "-remove_preproc_files",
-        "-execute",
-    ]
-    return " \\\n    ".join(opts)
 
 
 nGenerated = 0
@@ -108,32 +45,43 @@ nSkipped = 0
 for subj in subjVec:
     for ses in sesVec:
 
+        # Input
         sesDir = f"{dataDir}/{subj}/ses-{ses}"
-        codeDir = f"{dataDir}/{subj}/code"
 
-        
-        outDir = f"{sesDir}/{subj}.results.task-{task}-mni.delete" # Temporary, gets deleted once the keepers have been moved out.
-        meDir = f"{sesDir}/{subj}.results.task-{task}-mni.{seqType}" # Where the useful things end up.
-        doneFile = f"{meDir}/out.ss_review.{subj}.txt"         # Evidence of completion.
+        # Script Outputs
+        codeDir = f"{dataDir}/{subj}/code"              # Where the afni proc script ends up.
+        scriptId = f"{subj}.{ses}.{task}.{seqType}"     # The name of the script.
 
+        # Afni_proc outputs
+        outDir = f"{sesDir}/{subj}.results.task-{task}-mni.delete"      # Temporary dir, files moved, ends up deleted.
+        meDir = f"{sesDir}/{subj}.results.task-{task}-mni.{seqType}"    # Where the useful things end up.
+        doneFile = f"{meDir}/out.ss_review.{subj}.txt"                  # Evidence of completion.
+
+        # Determine the session directory is there.
         if not os.path.isdir(sesDir):
             print(f"{subj} ses-{ses}: no session directory - skipping")
             nSkipped += 1
             continue
 
+        # Check if things ran already
         if os.path.exists(doneFile):
             print(f"{subj} ses-{ses}: already processed - skipping")
             nDone += 1
             continue
 
-        t1Vec = posixGlob(f"{dataDir}/{subj}/anat/{subj}_T1fs_conform.nii*")
+        # Grab the T1
+        t1Vec = sorted(glob.glob(f"{dataDir}/{subj}/anat/{subj}_T1fs_conform.nii*"))
         if not t1Vec:
             print(f"{subj}: no T1 found - skipping ses-{ses}")
             nSkipped += 1
             continue
 
-        run1epi = posixGlob(f"{sesDir}/func_task-{task}_run-01*ap_e?.nii")
-        run2epi = posixGlob(f"{sesDir}/func_task-{task}_run-02*ap_e?.nii")
+        # Grab the epis.
+        # sorted() everywhere below: glob returns directory order, which is
+        # arbitrary on the server, and the echoes have to stay lined up with the
+        # echo times read further down.
+        run1epi = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-01*ap_e?.nii"))
+        run2epi = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-02*ap_e?.nii"))
         if not run1epi or not run2epi:
             print(f"{subj} ses-{ses}: missing EPIs "
                   f"(run-01: {len(run1epi)}, run-02: {len(run2epi)}) - skipping")
@@ -142,7 +90,7 @@ for subj in subjVec:
 
         # Echo times in ms, read straight out of the BIDS sidecars.
         echoTimes = []
-        for jsonPath in posixGlob(f"{sesDir}/func_task-{task}_run-01*ap_e?.json"):
+        for jsonPath in sorted(glob.glob(f"{sesDir}/func_task-{task}_run-01*ap_e?.json")):
             with open(jsonPath) as fh:
                 echoTimeSec = json.load(fh)["EchoTime"]
             echoTimeMs = f"{round(echoTimeSec * 1000, 4):g}"
@@ -163,20 +111,66 @@ for subj in subjVec:
         # --------------------------------------------------------- job script
         os.makedirs(codeDir, exist_ok=True)
 
+        # Use the logger to initialize the file.
         logger = slurmScriptLogger(
-            subj, ses, task, seqType, slurmScriptDir,
+            scriptId, slurmScriptDir,
             cpus_per_task=jobs,
             mem=memPerJob,
             time=timePerJob,
-            job_prefix="prep",
+            job_name=f"{jobPrefix}{subj}{ses}",
             file_prefix="preproc_job",
             description="Multi-echo resting-state afni_proc.py preprocessing",
         )
 
-        afniProcCmd = buildAfniProcCmd(subj, ses, codeDir, outDir,
-                                       t1Vec[0], run1epi, run2epi, echoTimes)
+        # The afni_proc.py call as one backslash-continued string. Every path is
+        # absolute, so the emitted script needs no shell variables of its own.
+        opts = [
+            "afni_proc.py",
+            f"-script {codeDir}/proc.{subj}.ses-{ses}.{task}.csh",
+            "-scr_overwrite",
+            f"-subj_id {subj}",
+            f"-out_dir {outDir}",
+            "-blocks despike tshift align tlrc volreg mask combine blur scale regress",
+            "-radial_correlate_blocks tcat volreg",
+            "-anat_has_skull yes",
+            f"-tcat_remove_first_trs {firstTRs}",
+            "-align_opts_aea -cost lpc+ZZ -giant_move -check_flip",
+            f"-tlrc_base {tlrcBase}",
+            "-tlrc_NL_warp",
+            f"-copy_anat {t1Vec[0]}",
+            "-volreg_align_to MIN_OUTLIER",
+            "-volreg_align_e2a",
+            "-volreg_tlrc_warp",
+            "-mask_epi_anat yes",
+            f"-dsets_me_run {' '.join(run1epi)}",
+            f"-dsets_me_run {' '.join(run2epi)}",
+            f"-echo_times {' '.join(echoTimes)}",
+            "-combine_method m_tedana",
+            "-reg_echo 2",
+            "-blur_in_mask yes",
+            "-blur_size 4",
+            "-mask_segment_anat yes",
+            "-mask_segment_erode yes",
+            "-regress_motion_per_run",
+            "-regress_apply_mot_types demean deriv",
+            "-regress_ROI_PC WMe 1",
+            "-regress_ROI_PC CSFe 1",
+            "-regress_ROI_PC brain 1",
+            "-regress_censor_motion 0.3",
+            "-regress_censor_outliers 0.15",
+            "-regress_apply_mask",
+            "-regress_run_clustsim no",
+            "-regress_opts_3dD -GOFORIT 10",
+            f"-jobs {jobs}",
+            "-regress_est_blur_epits",
+            "-regress_est_blur_errts",
+            "-test_stim_files no",
+            "-remove_preproc_files",
+            "-execute",
+        ]
+        afniProcCmd = " \\\n    ".join(opts)
 
-        # The whole job body in one go, mirroring the here file in the csh.
+        # Add in the first things. cd to the sesDir, run the afni_proc script. some debugging code follws, then make the output dir we care about, copy things over, delete the unwanted thing.
         logger.append(f"""module unload python
 module load python/anaconda/3.9.2
 

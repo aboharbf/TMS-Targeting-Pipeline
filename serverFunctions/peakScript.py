@@ -56,7 +56,7 @@ for subj in subjVec:
             dataIDstr = f"{subj}.{ses}.{task}.{seqType}"
             run_and_log(f"echo ### Starting Subject {subj}, session {ses} ###, sequence type {seqType}")
             
-            logger = slurmScriptLogger(subj, ses, task, seqType, slurmScriptDir)
+            logger = slurmScriptLogger(dataIDstr, slurmScriptDir, job_name=f"plu{subj}")
 
             for tMask, maskPath in zip(maskTypeVec, maskPathVec):
                 # for the mask of interest, generate the trace to be correlated against now.

@@ -65,57 +65,48 @@ def run_and_log(command, shell=True):
 class slurmScriptLogger:
     """
     A class to manage SLURM script generation and command logging.
-    
+
     Attributes:
-        subject_number (str): Subject identifier
-        session (str): Session identifier
-        task (str): Task identifier
-        sequence (str): Sequence identifier
-        script_id (str): Combined identifier for the script
+        script_id (str): Caller-supplied identifier for the script
+        job_name (str): --job-name written into the SBATCH header
         script_dir (str): Directory where the script will be stored
         script_path (str): Full path to the script file
     """
-    
-    def __init__(self, subject_number, session, task, sequence, script_dir,
+
+    def __init__(self, script_id, script_dir,
                  cpus_per_task=1, mem="16G", time="24:00:00",
-                 job_prefix="plu", file_prefix="slurm_job",
+                 job_name=None, file_prefix="slurm_job",
                  description="Automated Cluster detection pipeline"):
         """
         Initialize the SlurmScriptLogger.
-        
+
         Args:
-            subject_number (str): Subject identifier
-            session (str): Session identifier
-            task (str): Task identifier
-            sequence (str): Sequence identifier
+            script_id (str): Identifier built by the caller, used for the script
+                filename and stamped into the script header
             script_dir (str): Directory where scripts will be stored
             cpus_per_task (int): --cpus-per-task for the SBATCH header
             mem (str): --mem for the SBATCH header (total, not per-cpu)
             time (str): --time for the SBATCH header, HH:MM:SS
-            job_prefix (str): prepended to the subject number for --job-name
+            job_name (str): --job-name for the SBATCH header, defaults to script_id
             file_prefix (str): prepended to the script filename
             description (str): free text written into the script header
         """
-        self.subject_number = subject_number
-        self.session = session
-        self.task = task
-        self.sequence = sequence
+        self.script_id = script_id
         self.cpus_per_task = cpus_per_task
         self.mem = mem
         self.time = time
-        self.job_prefix = job_prefix
+        self.job_name = job_name if job_name else script_id
         self.description = description
-        self.script_id = f"{subject_number}.{session}.{task}.{sequence}"
         self.script_dir = script_dir
         self.script_filename = f"{file_prefix}-{self.script_id}.sh"
         self.script_path = os.path.join(script_dir, self.script_filename)
-        
+
         # Ensure directory exists
         os.makedirs(self.script_dir, exist_ok=True)
-        
+
         # Initialize the script file with header if it doesn't exist
         self._initialize_script()
-    
+
     def _initialize_script(self):
         """
         Create the script file with SLURM header if it doesn't already exist.
@@ -126,9 +117,8 @@ class slurmScriptLogger:
         if os.path.exists(self.script_path):
             os.remove(self.script_path)
 
-        info_str = f"Subject.Session.Task.Sequence - {self.script_id}"
         header = f"""#!/bin/bash
-#SBATCH --job-name={self.job_prefix}{self.subject_number}
+#SBATCH --job-name={self.job_name}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task={self.cpus_per_task}
@@ -137,13 +127,14 @@ class slurmScriptLogger:
 #SBATCH --output=job_%j.out
 #SBATCH --error=job_%j.err
 ## Script Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-## Description: {self.description} for {info_str}
+## Script ID: {self.script_id}
+## Description: {self.description}
 ## Author: Farid Aboharb, Balderston Lab
 
 """
         with open(self.script_path, 'w') as f:
             f.write(header)
-    
+
     def append(self, command):
         """
         Append a command to the SLURM script file.
