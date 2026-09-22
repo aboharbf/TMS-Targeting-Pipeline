@@ -1,6 +1,8 @@
 import os
 import glob
 import json
+import time
+import subprocess
 from pathlib import Path
 
 from utils import slurmScriptLogger
@@ -18,13 +20,17 @@ sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
 jobPrefix = 'prep'                      # prepended to the subject for --job-name
 
 jobs = 16                               # -jobs for 3dDeconvolve, and --cpus-per-task
-memPerJob = '16G'                       # TOTAL memory. 
+memPerCpu = 16                          # GB per CPU, same as f06's --mem-per-cpu=16G
+memPerJob = f'{memPerCpu * jobs}G'      # TOTAL memory (256G at 16 jobs).
 timePerJob = '24:00:00'
 
 tlrcBase = 'MNI152_2009_template.nii.gz'
 firstTRs = 4
 
-dryRun = False                          # True = report only, make sure all the req'd files are present. 
+dryRun = False                          # True = report only, make sure all the req'd files are present.
+submit = True                           # True = sbatch each script as it's written (as f06 does), False = write only.
+maxJobs = 200                           # Wait while more than this many of your jobs are queued (f06's maxjobs).
+waitSec = 60                            # How long to sleep between queue checks (f06's sleep 60).
 
 # ------------------------------------------------------------------- subjects
 subjVec = [item for item in os.listdir(dataDir)
@@ -39,6 +45,7 @@ print(f"Total subject count: {len(subjVec)}")
 
 
 nGenerated = 0
+nSubmitted = 0
 nDone = 0
 nSkipped = 0
 
@@ -208,12 +215,36 @@ fi
         print(f"{subj} ses-{ses}: wrote {logger.script_path}")
         nGenerated += 1
 
+        # ------------------------------------------------------------- submit
+        if submit:
+            # Throttle like f06: wait while too many of our jobs are queued.
+            # -h drops squeue's header line, so this counts jobs only.
+            while True:
+                queue = subprocess.run(["squeue", "--me", "-h"], capture_output=True,
+                                       text=True, check=True).stdout
+                numJobs = len(queue.splitlines())
+                if numJobs <= maxJobs:
+                    break
+                print(f"waiting for other jobs to finish ({numJobs} queued)")
+                time.sleep(waitSec)
+
+            # Resources come from the script's #SBATCH header; only the
+            # output/error files are set here, named the way f06 names them.
+            os.chmod(logger.script_path, 0o777)
+            subprocess.run(["sbatch",
+                            f"--output={slurmScriptDir}/{subj}.ses-{ses}.{task}.{seqType}.afni_proc.o",
+                            f"--error={slurmScriptDir}/{subj}.ses-{ses}.{task}.{seqType}.afni_proc.e",
+                            logger.script_path], check=True)
+            nSubmitted += 1
+
 
 print(f"\nGenerated {nGenerated} job script(s) in {slurmScriptDir}")
 print(f"  {nDone} subject/session(s) already processed")
 print(f"  {nSkipped} subject/session(s) skipped for missing inputs")
-print("\nNext steps:")
-print(f"  1. point slurm_dir in slurmBatch.py at {slurmScriptDir}, and raise its")
-print(f"     time/memory/cpus_per_task to match ({timePerJob}, {memPerJob}, {jobs})")
-print("  2. python slurmBatch.py")
-print("  3. sbatch run_all_jobs.sh")
+if submit and not dryRun:
+    print(f"Submitted {nSubmitted} job(s); check them with: squeue --me")
+else:
+    print("\nNext steps:")
+    print(f"  1. in slurmBatch.py, point slurm_dir at {slurmScriptDir} and set mode='individual'")
+    print("  2. python slurmBatch.py")
+    print("  3. bash submit_all_jobs.sh")

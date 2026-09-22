@@ -1,15 +1,27 @@
 """
-Generate a Slurm array job script to run all .sh files in the slurm/ folder as an array job.
+Generate a script that submits all .sh files in the slurm/ folder, either as
+one Slurm array job or as individual sbatch jobs.
+
+mode="array"      - one array job; every task gets the time/memory/cpus set
+                    below, and the #SBATCH headers inside the .sh files are ignored.
+mode="individual" - one sbatch per .sh file; each job gets the resources in its
+                    own #SBATCH header, with output/error named after the file.
 """
 
 from pathlib import Path
 
+mode="array"                   # "array" or "individual"
 job_name="pipeline"
 slurm_dir=Path("~/pipeline/slurm").expanduser() # Directory containing the .sh job files
+
+# array mode only
 output_file="run_all_jobs.sh"  # Name of the output batch script, placed in current dir
 time_limit="01:00:00"          # Time limit per job (format: HH:MM:SS)
 memory="8G"                    # Memory per job (e.g., "4G", "2000M")
 cpus_per_task=1                # Number of CPUs per task
+
+# individual mode only
+submit_file="submit_all_jobs.sh"  # Name of the output submit script, placed in current dir
 
 # Get all .sh files in the directory
 slurm_path = Path(slurm_dir)
@@ -23,6 +35,36 @@ if not sh_files:
 
 num_jobs = len(sh_files)
 print(f"Found {num_jobs} .sh files in '{slurm_dir}/'")
+
+if mode == "individual":
+    # Flags on the sbatch command line override the script's #SBATCH header,
+    # so only --output/--error are passed; resources come from each header.
+    submit_script = f"""#!/bin/bash
+# Auto-generated submit script
+# Generated for {num_jobs} jobs from {slurm_dir}/
+# Run with: bash {submit_file}
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+"""
+    for sh_file in sh_files:
+        submit_script += (f'sbatch --output=logs/{sh_file.stem}_%j.out '
+                          f'--error=logs/{sh_file.stem}_%j.err "{sh_file}"\n')
+
+    with open(submit_file, 'w') as f:
+        f.write(submit_script)
+
+    print(f"\nGenerated submit script: {submit_file}")
+    print(f"\nTo submit the jobs, run:")
+    print(f"  bash {submit_file}")
+    print(f"\nJob files included:")
+    for sh_file in sh_files:
+        print(f"  {sh_file}")
+    raise SystemExit(0)
+
+elif mode != "array":
+    raise ValueError(f"mode must be 'array' or 'individual', not '{mode}'")
 
 # Generate the batch script
 batch_script = f"""#!/bin/bash
