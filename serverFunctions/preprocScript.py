@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from utils import slurmScriptLogger
+from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
@@ -21,9 +21,6 @@ slurmLogDir = f'{slurmScriptDir}/logs_{timestamp}'
 # -------------------------------------------------------------- configuration
 runTag = 'noclean'                      # Marks this pipeline run's outputs; last '_' field of the base name.
                                         # No '_' allowed (use '-'), so names split cleanly. '' = no tag.
-if '_' in runTag:
-    raise ValueError(f"runTag '{runTag}' must not contain '_'")
-tagSfx = f"_{runTag}" if runTag else ''
 
 task = 'rest'
 seqType = 'me'                          # first '.' field after the base name; also the results dir suffix
@@ -36,20 +33,14 @@ timePerJob = '24:00:00'
 
 tlrcBase = 'MNI152_2009_template.nii.gz'
 firstTRs = 4
+spaceTag = spaceTagFromTemplate(tlrcBase)   # 'mni' for the MNI152_2009 template.
 
-# Space field of the base name, derived from the template. Add an elif per new
-# template, each with its own distinct tag.
-if os.path.basename(tlrcBase) == 'MNI152_2009_template.nii.gz':
-    spaceTag = 'mni'
-else:
-    raise ValueError(f"no space tag defined for tlrcBase '{tlrcBase}'")
-
-# File/dir naming:  {subj}_ses-{ses}_task-{task}_{space}[_{tag}] . {seqType} . {stage} . {ext}
-#   job script  {base}.{seqType}.job.sh        (slurmScriptDir)
-#   job logs    {base}.{seqType}.job.o/.e      (slurmLogDir)
-#   proc script {base}.{seqType}.proc.csh      (codeDir)
-#   temp dir    {base}.delete                  (sesDir)
-#   results dir {base}.{seqType}               (sesDir)
+# File/dir naming lives in utils.preprocNames:
+#   job script  {scriptId}.job.sh      (slurmScriptDir)
+#   job logs    {scriptId}.job.o/.e    (slurmLogDir)
+#   proc script {scriptId}.proc.csh    (codeDir)
+#   temp dir    {baseId}.delete        (sesDir)
+#   results dir {scriptId}             (sesDir)
 
 dryRun = False                          # True = report only, make sure all the req'd files are present.
 submit = True                           # True = sbatch each script as it's written (as f06 does), False = write only.
@@ -80,9 +71,10 @@ for subj in subjVec:
         sesDir = f"{dataDir}/{subj}/ses-{ses}"
 
         # Names
-        baseId = f"{subj}_ses-{ses}_task-{task}_{spaceTag}{tagSfx}"
-        scriptId = f"{baseId}.{seqType}"                # Stem of the job script, logs, proc script, job name.
-        subjId = f"{subj}_ses-{ses}"                    # afni_proc -subj_id; names the files inside the results dir.
+        names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
+        baseId = names['baseId']
+        scriptId = names['scriptId']                    # Stem of the job script, logs, proc script, job name.
+        subjId = names['subjId']                        # afni_proc -subj_id; names the files inside the results dir.
 
         # Script Outputs
         codeDir = f"{dataDir}/{subj}/code"              # Where the afni proc script ends up.

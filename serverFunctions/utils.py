@@ -62,6 +62,71 @@ def run_and_log(command, shell=True):
     }
 
 
+def print_and_log(message):
+    """
+    Print a message to stdout and write it to the session log, without
+    spawning a shell the way run_and_log("echo ...") does.
+    """
+    print(message)
+    file_logger.info(message)
+
+
+def spaceTagFromTemplate(tlrcBase):
+    """
+    Space field of the preprocessing base name, derived from the afni_proc
+    -tlrc_base template. Add an elif per new template, each with its own tag.
+    """
+    if os.path.basename(tlrcBase) == 'MNI152_2009_template.nii.gz':
+        return 'mni'
+    raise ValueError(f"no space tag defined for tlrcBase '{tlrcBase}'")
+
+
+def preprocNames(subj, ses, task, seqType, spaceTag, runTag=''):
+    """
+    Names shared by the preprocessing outputs and everything that reads them.
+
+    Scheme: {subj}_ses-{ses}_task-{task}_{space}[_{tag}] . {seqType} . {stage} . {ext}
+        job script  {scriptId}.job.sh
+        job logs    {scriptId}.job.o/.e
+        proc script {scriptId}.proc.csh
+        temp dir    {baseId}.delete
+        results dir {scriptId}
+        errts       {scriptId}/errts.{subjId}.tproject+tlrc
+
+    Returns:
+        dict with baseId, scriptId and subjId (afni_proc -subj_id)
+    """
+    if '_' in runTag:
+        raise ValueError(f"runTag '{runTag}' must not contain '_'")
+    tagSfx = f"_{runTag}" if runTag else ''
+    baseId = f"{subj}_ses-{ses}_task-{task}_{spaceTag}{tagSfx}"
+    return {
+        'baseId': baseId,
+        'scriptId': f"{baseId}.{seqType}",
+        'subjId': f"{subj}_ses-{ses}",
+    }
+
+
+def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', ext='.BRIK'):
+    """
+    Path to a session's errts file, trying the current preprocNames scheme
+    first and falling back to the pre-rename (f06) name:
+        {subj}.results.task-{task}-{space}.{seqType}/errts.{subj}.tproject+tlrc
+    The old names carry no run tag, so a fallback hit is untagged output.
+
+    Returns:
+        (path, isLegacy). If neither exists, the current-scheme path and False.
+    """
+    names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
+    sesDir = f"{dataDir}/{subj}/ses-{ses}"
+    newPath = f"{sesDir}/{names['scriptId']}/errts.{names['subjId']}.tproject+tlrc{ext}"
+    legacyPath = f"{sesDir}/{subj}.results.task-{task}-{spaceTag}.{seqType}/errts.{subj}.tproject+tlrc{ext}"
+
+    if os.path.exists(newPath) or not os.path.exists(legacyPath):
+        return newPath, False
+    return legacyPath, True
+
+
 class slurmScriptLogger:
     """
     A class to manage SLURM script generation and command logging.

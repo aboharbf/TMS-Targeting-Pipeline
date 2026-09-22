@@ -2,7 +2,7 @@
 
 import os
 import subprocess
-from utils import run_and_log, slurmScriptLogger
+from utils import run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, resolveErrts
 from pathlib import Path
 
 # dir paths
@@ -40,6 +40,10 @@ clustMaskPathVec = [clustMaskTemplate.format(cMask) for cMask in clustMaskVec]
 
 task = 'rest'
 
+# Which preprocessing outputs to read; must match preprocScript.py's settings.
+runTag = 'noclean'
+spaceTag = spaceTagFromTemplate('MNI152_2009_template.nii.gz')
+
 scriptMode = 0 # the overall script behavior. 0 = slurm, 1 = run in python, 2 = both.
 
 # for each subject
@@ -52,11 +56,18 @@ for subj in subjVec:
     for ses in sesVec:
         for seqType in seqVec:
             # Files of interest
-            errtsFile = f"{dataDir}/{subj}/ses-{ses}/{subj}.results.task-{task}-mni.{seqType}/errts.{subj}.tproject+tlrc.BRIK" #.BRIK contains data, .HEAD is metadata.
+            # .BRIK contains data, .HEAD is metadata. Falls back to the pre-rename name if needed.
+            errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag)
             dataIDstr = f"{subj}.{ses}.{task}.{seqType}"
             run_and_log(f"echo ### Starting Subject {subj}, session {ses} ###, sequence type {seqType}")
-            
+
             logger = slurmScriptLogger(dataIDstr, slurmScriptDir, job_name=f"plu{subj}")
+
+            if isLegacy:
+                legacyMsg = (f"NOTE: {subj} ses-{ses} {seqType}: no errts under the current naming "
+                             f"(runTag '{runTag}'); using legacy untagged file {errtsFile}")
+                print_and_log(legacyMsg)
+                logger.append(f'echo "{legacyMsg}"')
 
             for tMask, maskPath in zip(maskTypeVec, maskPathVec):
                 # for the mask of interest, generate the trace to be correlated against now.

@@ -11,7 +11,7 @@
 
 import os
 import subprocess
-from utils import run_and_log, slurmScriptLogger
+from utils import run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, resolveErrts
 from pathlib import Path
 
 # dir paths
@@ -42,6 +42,10 @@ print(f"Total Subject count: {len(subjVec)}")
 seqVec = ['se', 'me', 'se_e2'] # 'me'
 task = 'rest'
 
+# Which preprocessing outputs to check; must match preprocScript.py's settings.
+runTag = 'noclean'
+spaceTag = spaceTagFromTemplate('MNI152_2009_template.nii.gz')
+
 output_file = 'fileCheck_results.txt'
 
 with open(output_file, 'w') as f:
@@ -53,13 +57,19 @@ with open(output_file, 'w') as f:
             for subj in subjVec:
                 for ses in sesVec:
                     # Files of interest
-                    errtsFile = f"{dataDir}/{subj}/ses-{ses}/{subj}.results.task-{task}-mni.{seqType}/errts.{subj}.tproject+tlrc.BRIK" #.BRIK contains data, .HEAD is metadata.
-                    errtsFile2 = f"{dataDir}/{subj}/ses-{ses}/{subj}.results.task-{task}-mni.{seqType}/errts.{subj}.tproject+tlrc.BRIK.gz" #.BRIK contains data, .HEAD is metadata.
+                    # .BRIK contains data, .HEAD is metadata. se_e2 outputs are gzipped.
+                    # Falls back to the pre-rename name if needed.
+                    ext = '.BRIK.gz' if seqType == 'se_e2' else '.BRIK'
+                    errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType,
+                                                       spaceTag, runTag, ext=ext)
 
-                    if not os.path.exists(errtsFile) and not seqType == 'se_e2':
-                        f.write(f"{errtsFile} does not exist\n")
-                    elif not os.path.exists(errtsFile2) and seqType == 'se_e2':
-                        f.write(f"{errtsFile2} dose not exist \n")
+                    if not os.path.exists(errtsFile):
+                        f.write(f"{errtsFile} does not exist (legacy name also checked)\n")
+                    elif isLegacy:
+                        legacyMsg = (f"NOTE: {subj} ses-{ses} {seqType}: no errts under the current naming "
+                                     f"(runTag '{runTag}'); found legacy untagged file {errtsFile}")
+                        print_and_log(legacyMsg)
+                        f.write(f"{legacyMsg}\n")
 
 print(f"Results saved to {output_file}")                
 
