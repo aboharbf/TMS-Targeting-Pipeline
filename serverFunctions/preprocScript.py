@@ -3,6 +3,7 @@ import glob
 import json
 import time
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from utils import slurmScriptLogger
@@ -13,11 +14,20 @@ dataDir = f'{projDir}/nbthetaconn/data'
 
 slurmScriptDir = f'{projDir}/pipeline/slurm_preproc'
 
+# sbatch .o/.e files go in a fresh subdir per invocation of this script.
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+slurmLogDir = f'{slurmScriptDir}/logs_{timestamp}'
+
 # -------------------------------------------------------------- configuration
+runTag = 'noclean'                      # Marks this pipeline run's outputs; last '_' field of the base name.
+                                        # No '_' allowed (use '-'), so names split cleanly. '' = no tag.
+if '_' in runTag:
+    raise ValueError(f"runTag '{runTag}' must not contain '_'")
+tagSfx = f"_{runTag}" if runTag else ''
+
 task = 'rest'
-seqType = 'me'                          # names the results dir and the job file
+seqType = 'me'                          # first '.' field after the base name; also the results dir suffix
 sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
-jobPrefix = 'prep'                      # prepended to the subject for --job-name
 
 jobs = 16                               # -jobs for 3dDeconvolve, and --cpus-per-task
 memPerCpu = 16                          # GB per CPU, same as f06's --mem-per-cpu=16G
@@ -26,6 +36,20 @@ timePerJob = '24:00:00'
 
 tlrcBase = 'MNI152_2009_template.nii.gz'
 firstTRs = 4
+
+# Space field of the base name, derived from the template. Add an elif per new
+# template, each with its own distinct tag.
+if os.path.basename(tlrcBase) == 'MNI152_2009_template.nii.gz':
+    spaceTag = 'mni'
+else:
+    raise ValueError(f"no space tag defined for tlrcBase '{tlrcBase}'")
+
+# File/dir naming:  {subj}_ses-{ses}_task-{task}_{space}[_{tag}] . {seqType} . {stage} . {ext}
+#   job script  {base}.{seqType}.job.sh        (slurmScriptDir)
+#   job logs    {base}.{seqType}.job.o/.e      (slurmLogDir)
+#   proc script {base}.{seqType}.proc.csh      (codeDir)
+#   temp dir    {base}.delete                  (sesDir)
+#   results dir {base}.{seqType}               (sesDir)
 
 dryRun = False                          # True = report only, make sure all the req'd files are present.
 submit = True                           # True = sbatch each script as it's written (as f06 does), False = write only.
@@ -55,14 +79,18 @@ for subj in subjVec:
         # Input
         sesDir = f"{dataDir}/{subj}/ses-{ses}"
 
+        # Names
+        baseId = f"{subj}_ses-{ses}_task-{task}_{spaceTag}{tagSfx}"
+        scriptId = f"{baseId}.{seqType}"                # Stem of the job script, logs, proc script, job name.
+        subjId = f"{subj}_ses-{ses}"                    # afni_proc -subj_id; names the files inside the results dir.
+
         # Script Outputs
         codeDir = f"{dataDir}/{subj}/code"              # Where the afni proc script ends up.
-        scriptId = f"{subj}.{ses}.{task}.{seqType}"     # The name of the script.
 
         # Afni_proc outputs
-        outDir = f"{sesDir}/{subj}.results.task-{task}-mni.delete"      # Temporary dir, files moved, ends up deleted.
-        meDir = f"{sesDir}/{subj}.results.task-{task}-mni.{seqType}"    # Where the useful things end up.
-        doneFile = f"{meDir}/out.ss_review.{subj}.txt"                  # Evidence of completion.
+        outDir = f"{sesDir}/{baseId}.delete"            # Temporary dir, files moved, ends up deleted.
+        meDir = f"{sesDir}/{scriptId}"                  # Where the useful things end up.
+        doneFile = f"{meDir}/out.ss_review.{subjId}.txt"    # Evidence of completion.
 
         # Determine the session directory is there.
         if not os.path.isdir(sesDir):
@@ -91,6 +119,12 @@ for subj in subjVec:
         run2epi = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-02*ap_e?.nii"))
         if not run1epi or not run2epi:
             print(f"{subj} ses-{ses}: missing EPIs "
+                  f"(run-01: {len(run1epi)}, run-02: {len(run2epi)}) - skipping")
+            nSkipped += 1
+            continue
+
+        if len(run2epi) != len(run1epi):
+            print(f"{subj} ses-{ses}: echo count differs between runs "
                   f"(run-01: {len(run1epi)}, run-02: {len(run2epi)}) - skipping")
             nSkipped += 1
             continue
@@ -124,8 +158,9 @@ for subj in subjVec:
             cpus_per_task=jobs,
             mem=memPerJob,
             time=timePerJob,
-            job_name=f"{jobPrefix}{subj}{ses}",
-            file_prefix="preproc_job",
+            job_name=scriptId,
+            file_prefix=None,
+            file_suffix=".job",
             description="Multi-echo resting-state afni_proc.py preprocessing",
         )
 
@@ -133,9 +168,9 @@ for subj in subjVec:
         # absolute, so the emitted script needs no shell variables of its own.
         opts = [
             "afni_proc.py",
-            f"-script {codeDir}/proc.{subj}.ses-{ses}.{task}.csh",
+            f"-script {codeDir}/{scriptId}.proc.csh",
             "-scr_overwrite",
-            f"-subj_id {subj}",
+            f"-subj_id {subjId}",
             f"-out_dir {outDir}",
             "-blocks despike tshift align tlrc volreg mask combine blur scale regress",
             "-radial_correlate_blocks tcat volreg",
@@ -200,7 +235,7 @@ mv {outDir}/*errts* {meDir}
 mv {outDir}/*stats* {meDir}
 mv {outDir}/*QC* {meDir}
 mv {outDir}/final_epi_vr_base_min_outlier* {meDir}
-mv {outDir}/anat_final.{subj}+tlrc* {meDir}
+mv {outDir}/anat_final.{subjId}+tlrc* {meDir}
 mv {outDir}/out.ss*.txt {meDir}
 
 if [ -f {doneFile} ]; then
@@ -230,10 +265,12 @@ fi
 
             # Resources come from the script's #SBATCH header; only the
             # output/error files are set here, named the way f06 names them.
+            # sbatch won't create the log dir, so make it before submitting.
+            os.makedirs(slurmLogDir, exist_ok=True)
             os.chmod(logger.script_path, 0o777)
             subprocess.run(["sbatch",
-                            f"--output={slurmScriptDir}/{subj}.ses-{ses}.{task}.{seqType}.afni_proc.o",
-                            f"--error={slurmScriptDir}/{subj}.ses-{ses}.{task}.{seqType}.afni_proc.e",
+                            f"--output={slurmLogDir}/{scriptId}.job.o",
+                            f"--error={slurmLogDir}/{scriptId}.job.e",
                             logger.script_path], check=True)
             nSubmitted += 1
 
@@ -243,6 +280,8 @@ print(f"  {nDone} subject/session(s) already processed")
 print(f"  {nSkipped} subject/session(s) skipped for missing inputs")
 if submit and not dryRun:
     print(f"Submitted {nSubmitted} job(s); check them with: squeue --me")
+    if nSubmitted:
+        print(f"Job .o/.e files will be in {slurmLogDir}")
 else:
     print("\nNext steps:")
     print(f"  1. in slurmBatch.py, point slurm_dir at {slurmScriptDir} and set mode='individual'")

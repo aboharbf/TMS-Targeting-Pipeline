@@ -75,7 +75,7 @@ class slurmScriptLogger:
 
     def __init__(self, script_id, script_dir,
                  cpus_per_task=1, mem="16G", time="24:00:00",
-                 job_name=None, file_prefix="slurm_job",
+                 job_name=None, file_prefix="slurm_job", file_suffix="",
                  description="Automated Cluster detection pipeline"):
         """
         Initialize the SlurmScriptLogger.
@@ -88,7 +88,9 @@ class slurmScriptLogger:
             mem (str): --mem for the SBATCH header (total, not per-cpu)
             time (str): --time for the SBATCH header, HH:MM:SS
             job_name (str): --job-name for the SBATCH header, defaults to script_id
-            file_prefix (str): prepended to the script filename
+            file_prefix (str): prepended to the script filename with a '-';
+                None or '' for no prefix
+            file_suffix (str): appended to script_id before '.sh' (e.g. '.job')
             description (str): free text written into the script header
         """
         self.script_id = script_id
@@ -98,7 +100,8 @@ class slurmScriptLogger:
         self.job_name = job_name if job_name else script_id
         self.description = description
         self.script_dir = script_dir
-        self.script_filename = f"{file_prefix}-{self.script_id}.sh"
+        prefix = f"{file_prefix}-" if file_prefix else ""
+        self.script_filename = f"{prefix}{self.script_id}{file_suffix}.sh"
         self.script_path = os.path.join(script_dir, self.script_filename)
 
         # Ensure directory exists

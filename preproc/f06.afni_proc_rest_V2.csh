@@ -7,6 +7,15 @@ setenv SUBJECTS_DIR ${expdir}/anat
 setenv outfile f06.afni_proc_rest.csh
 setenv jobs 16
 
+# Marks this pipeline run's outputs; goes before the final dot of script/log
+# names and before .delete/.me in dir names. Set to "" for no tag.
+setenv runTag no_clean
+if ( "$runTag" == "" ) then
+    set tagSfx = ""
+else
+    set tagSfx = "_${runTag}"
+endif
+
 # sbatch writes its .o/.e files here, so this has to exist before we submit
 mkdir -p ${scrdir}
 
@@ -29,10 +38,10 @@ foreach session (ses-01 ses-02 ses-03 ses-04)
     cd ${subdir}/${subject}/${session}
 
     set logdir  = ${subdir}/${subject}/code
-    set jobfile = ${logdir}/job.${outfile}.${subject}.${session}
+    set jobfile = ${logdir}/job.${outfile}.${subject}.${session}${tagSfx}
 
-    set outdir  = ${subdir}/${subject}/${session}/${subject}.results.task-rest-mni.delete     # Temporary, gets deleted.
-    set medir   = ${subdir}/${subject}/${session}/${subject}.results.task-rest-mni.me     # Where the useful things are placed.
+    set outdir  = ${subdir}/${subject}/${session}/${subject}.results.task-rest-mni${tagSfx}.delete     # Temporary, gets deleted.
+    set medir   = ${subdir}/${subject}/${session}/${subject}.results.task-rest-mni${tagSfx}.me     # Where the useful things are placed.
 
     # evidence of completion
     set donefile = ${medir}/out.ss_review.${subject}.txt
@@ -54,6 +63,11 @@ foreach session (ses-01 ses-02 ses-03 ses-04)
     set run2epi = (`ls func_task-rest_run-02*ap_e?.nii`)
     if ( $#run1epi == 0 || $#run2epi == 0 ) then
         echo "${subject} ${session}: missing EPIs (run-01: $#run1epi, run-02: $#run2epi) - skipping"
+        continue
+    endif
+
+    if ( $#run2epi != $#run1epi ) then
+        echo "${subject} ${session}: echo count differs between runs (run-01: $#run1epi, run-02: $#run2epi) - skipping"
         continue
     endif
 
@@ -85,7 +99,7 @@ set outdir = ${outdir}
 set medir  = ${medir}
 
 afni_proc.py \
--script ${logdir}/proc.${subject}.${session}.rest.csh \
+-script ${logdir}/proc.${subject}.${session}.rest${tagSfx}.csh \
 -scr_overwrite \
 -subj_id ${subject} \
 -out_dir \$outdir \
@@ -176,8 +190,8 @@ JobFileContents
     --ntasks=1 \
     --cpus-per-task=${jobs} \
     --mem-per-cpu=16G \
-    --output=${scrdir}/${subject}.${session}.f06.afni_proc.o \
-    --error=${scrdir}/${subject}.${session}.f06.afni_proc.e \
+    --output=${scrdir}/${subject}.${session}.f06.afni_proc${tagSfx}.o \
+    --error=${scrdir}/${subject}.${session}.f06.afni_proc${tagSfx}.e \
     ${jobfile}
 
 end
