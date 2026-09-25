@@ -7,7 +7,7 @@ setenv stmdir ${expdir}/stimtimes
 setenv resdir ${expdir}/results
 setenv SUBJECTS_DIR ${expdir}/anat
 setenv outfile f06.afni_proc_rest.csh
-setenv jobs 16
+setenv jobs 8
 
 if ( "$argv" == "" ) then
         echo "No subject specified as argument - running all subjects"
@@ -135,7 +135,7 @@ sbatch \
 --nodes=1 \
 --ntasks=1 \
 --cpus-per-task=${jobs} \
---mem-per-cpu=16G \
+--mem-per-cpu=8G \
 --output=${scrdir}/${subject}.${session}.f06.afni_proc.o \
 --error=${scrdir}/${subject}.${session}.f06.afni_proc.e \
 ${logfile}

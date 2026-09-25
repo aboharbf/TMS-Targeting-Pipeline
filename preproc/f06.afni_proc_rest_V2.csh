@@ -5,7 +5,8 @@ setenv stmdir ${expdir}/stimtimes
 setenv resdir ${expdir}/results
 setenv SUBJECTS_DIR ${expdir}/anat
 setenv outfile f06.afni_proc_rest.csh
-setenv jobs 16
+setenv jobs 8
+setenv memPerCpu 8
 
 # Marks this pipeline run's outputs; goes before the final dot of script/log
 # names and before .delete/.me in dir names. Set to "" for no tag.

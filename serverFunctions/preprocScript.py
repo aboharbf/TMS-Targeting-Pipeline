@@ -26,9 +26,9 @@ task = 'rest'
 seqType = 'me'                          # first '.' field after the base name; also the results dir suffix
 sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
 
-jobs = 16                               # -jobs for 3dDeconvolve, and --cpus-per-task
-memPerCpu = 16                          # GB per CPU, same as f06's --mem-per-cpu=16G
-memPerJob = f'{memPerCpu * jobs}G'      # TOTAL memory (256G at 16 jobs).
+jobs = 8                               # -jobs for 3dDeconvolve, and --cpus-per-task
+memPerCpu = 8                          # GB per CPU, same as f06's --mem-per-cpu=8G
+memPerJob = f'{memPerCpu * jobs}G'      # TOTAL memory (64G at 8 jobs).
 timePerJob = '24:00:00'
 
 tlrcBase = 'MNI152_2009_template.nii.gz'

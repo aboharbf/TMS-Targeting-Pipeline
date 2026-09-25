@@ -31,9 +31,9 @@ set runTag = noclean
 set task = rest
 set seqType = me                    # first '.' field after the base name; also the results dir suffix
 
-set jobs = 16                       # -jobs for 3dDeconvolve, and --cpus-per-task
-set memPerCpu = 16                  # GB per CPU
-@ memPerJob = $memPerCpu * $jobs    # TOTAL memory in GB (256 at 16 jobs)
+set jobs = 8                       # -jobs for 3dDeconvolve, and --cpus-per-task
+set memPerCpu = 8                  # GB per CPU
+@ memPerJob = $memPerCpu * $jobs    # TOTAL memory in GB (64 at 8 jobs)
 set timePerJob = 24:00:00
 
 set tlrcBase = MNI152_2009_template.nii.gz
