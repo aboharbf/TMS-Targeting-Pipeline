@@ -17,6 +17,7 @@ from pathlib import Path
 # dir paths
 projDir = Path("~").expanduser()
 dataDir = f'{projDir}/nbthetaconn/data'
+outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'   # preprocScript.py's output root; must match.
 maskDir = f'{projDir}/nbthetaconn/masks'
 outDirMain = f'{projDir}/pipeline/results'
 slurmScriptDir = f'{projDir}/pipeline/slurm'
@@ -61,7 +62,7 @@ with open(output_file, 'w') as f:
                     # Falls back to the pre-rename name if needed.
                     ext = '.BRIK.gz' if seqType == 'se_e2' else '.BRIK'
                     errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType,
-                                                       spaceTag, runTag, ext=ext)
+                                                       spaceTag, runTag, ext=ext, outputDir=outputDir)
 
                     if not os.path.exists(errtsFile):
                         f.write(f"{errtsFile} does not exist (legacy name also checked)\n")

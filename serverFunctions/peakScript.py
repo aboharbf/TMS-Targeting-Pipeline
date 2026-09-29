@@ -8,6 +8,7 @@ from pathlib import Path
 # dir paths
 projDir = Path("~").expanduser()
 dataDir = f'{projDir}/nbthetaconn/data'
+outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'   # preprocScript.py's output root; must match.
 maskDir = f'{projDir}/nbthetaconn/masks'
 outDirMain = f'{projDir}/pipeline/results'
 slurmScriptDir = f'{projDir}/pipeline/slurm'
@@ -57,7 +58,8 @@ for subj in subjVec:
         for seqType in seqVec:
             # Files of interest
             # .BRIK contains data, .HEAD is metadata. Falls back to the pre-rename name if needed.
-            errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag)
+            errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag,
+                                               outputDir=outputDir)
             dataIDstr = f"{subj}.{ses}.{task}.{seqType}"
             run_and_log(f"echo ### Starting Subject {subj}, session {ses} ###, sequence type {seqType}")
 

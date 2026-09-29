@@ -10,7 +10,8 @@ from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
-dataDir = f'{projDir}/nbthetaconn/data'
+dataDir = f'{projDir}/nbthetaconn/data'         # Inputs (T1, EPIs, sidecars); read only.
+outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'    # Outputs; mirrors dataDir as {subj}/ses-{ses}, {subj}/code.
 
 slurmScriptDir = f'{projDir}/pipeline/slurm_preproc'
 
@@ -38,14 +39,16 @@ spaceTag = spaceTagFromTemplate(tlrcBase)   # 'mni' for the MNI152_2009 template
 # File/dir naming lives in utils.preprocNames:
 #   job script  {scriptId}.job.sh      (slurmScriptDir)
 #   job logs    {scriptId}.job.o/.e    (slurmLogDir)
-#   proc script {scriptId}.proc.csh    (codeDir)
-#   temp dir    {baseId}.delete        (sesDir)
-#   results dir {scriptId}             (sesDir)
+#   proc script {scriptId}.proc.csh    (codeDir      = outputDir/{subj}/code)
+#   temp dir    {baseId}.delete        (outputSesDir = outputDir/{subj}/ses-{ses})
+#   results dir {scriptId}             (outputSesDir)
 
 dryRun = False                          # True = report only, make sure all the req'd files are present.
 submit = True                           # True = sbatch each script as it's written (as f06 does), False = write only.
 maxJobs = 200                           # Wait while more than this many of your jobs are queued (f06's maxjobs).
 waitSec = 60                            # How long to sleep between queue checks (f06's sleep 60).
+postRunCleanUp = 1                      # 1 = move the useful outputs to the results dir and delete the temp dir,
+                                        # 0 = mv the whole temp dir to the results dir, contents untouched.
 
 # ------------------------------------------------------------------- subjects
 subjVec = [item for item in os.listdir(dataDir)
@@ -53,7 +56,7 @@ subjVec = [item for item in os.listdir(dataDir)
 subjVec.sort(key=lambda x: int(x))
 
 # As a test, just do the first few
-subjVec = subjVec[0:1]
+subjVec = subjVec[0:10]
 
 print(f"Preparing scripts on following subjects: {subjVec}")
 print(f"Total subject count: {len(subjVec)}")
@@ -77,11 +80,12 @@ for subj in subjVec:
         subjId = names['subjId']                        # afni_proc -subj_id; names the files inside the results dir.
 
         # Script Outputs
-        codeDir = f"{dataDir}/{subj}/code"              # Where the afni proc script ends up.
+        codeDir = f"{outputDir}/{subj}/code"            # Where the afni proc script ends up.
 
         # Afni_proc outputs
-        outDir = f"{sesDir}/{baseId}.delete"            # Temporary dir, files moved, ends up deleted.
-        meDir = f"{sesDir}/{scriptId}"                  # Where the useful things end up.
+        outputSesDir = f"{outputDir}/{subj}/ses-{ses}"  # Output counterpart of sesDir.
+        outDir = f"{outputSesDir}/{baseId}.delete"      # Temporary dir, files moved, ends up deleted.
+        meDir = f"{outputSesDir}/{scriptId}"            # Where the useful things end up.
         doneFile = f"{meDir}/out.ss_review.{subjId}.txt"    # Evidence of completion.
 
         # Determine the session directory is there.
@@ -199,16 +203,56 @@ for subj in subjVec:
             "-regress_est_blur_epits",
             "-regress_est_blur_errts",
             "-test_stim_files no",
-            "-remove_preproc_files",
+            #"-remove_preproc_files",
             "-execute",
         ]
         afniProcCmd = " \\\n    ".join(opts)
 
-        # Add in the first things. cd to the sesDir, run the afni_proc script. some debugging code follws, then make the output dir we care about, copy things over, delete the unwanted thing.
+        # What happens to outDir after a successful run.
+        if postRunCleanUp:
+            cleanUpCmd = f"""mkdir -p {meDir}
+mv {outDir}/*errts* {meDir}
+mv {outDir}/*stats* {meDir}
+mv {outDir}/*QC* {meDir}
+mv {outDir}/final_epi_vr_base_min_outlier* {meDir}
+mv {outDir}/anat_final.{subjId}+tlrc* {meDir}
+mv {outDir}/out.ss*.txt {meDir}
+
+# Inputs for re-running blur/censor/regress from the results dir:
+# motion params, outlier censor, ROI PCs, X matrices (all small .1D),
+# the tedana-combined runs (pb04), and the EPI/ROI masks.
+mv {outDir}/*.1D {meDir}
+mv {outDir}/pb04.{subjId}.r*.combine+tlrc.* {meDir}
+mv {outDir}/mask_* {meDir}
+
+if [ -f {doneFile} ]; then
+    rm -rf {outDir}
+else
+    echo "ERROR: {doneFile} missing after the run for {subj} ses-{ses}"
+    echo "       leaving {outDir} in place"
+    exit 1
+fi"""
+        else:
+            # mv would nest outDir inside an existing meDir, so refuse instead.
+            cleanUpCmd = f"""if [ -e {meDir} ]; then
+    echo "ERROR: {meDir} already exists for {subj} ses-{ses}"
+    echo "       leaving {outDir} in place"
+    exit 1
+fi
+
+mv {outDir} {meDir}
+
+if [ ! -f {doneFile} ]; then
+    echo "ERROR: {doneFile} missing after the run for {subj} ses-{ses}"
+    exit 1
+fi"""
+
+        # Add in the first things. cd to the outputSesDir, run the afni_proc script. some debugging code follws, then make the output dir we care about, copy things over, delete the unwanted thing.
         logger.append(f"""module unload python
 module load python/anaconda/3.9.2
 
-cd {sesDir}
+mkdir -p {outputSesDir}
+cd {outputSesDir}
 
 {afniProcCmd}
 
@@ -222,21 +266,7 @@ if [ $aprc_status -ne 0 ]; then
     exit 1
 fi
 
-mkdir -p {meDir}
-mv {outDir}/*errts* {meDir}
-mv {outDir}/*stats* {meDir}
-mv {outDir}/*QC* {meDir}
-mv {outDir}/final_epi_vr_base_min_outlier* {meDir}
-mv {outDir}/anat_final.{subjId}+tlrc* {meDir}
-mv {outDir}/out.ss*.txt {meDir}
-
-if [ -f {doneFile} ]; then
-    rm -rf {outDir}
-else
-    echo "ERROR: {doneFile} missing after the run for {subj} ses-{ses}"
-    echo "       leaving {outDir} in place"
-    exit 1
-fi
+{cleanUpCmd}
 """)
 
         print(f"{subj} ses-{ses}: wrote {logger.script_path}")
