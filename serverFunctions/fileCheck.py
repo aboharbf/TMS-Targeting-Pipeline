@@ -57,14 +57,12 @@ with open(output_file, 'w') as f:
 
             for subj in subjVec:
                 for ses in sesVec:
-                    # Files of interest
-                    # .BRIK contains data, .HEAD is metadata. se_e2 outputs are gzipped.
+                    # Files of interest: errts dataset prefix (.HEAD/.BRIK[.gz]).
                     # Falls back to the pre-rename name if needed.
-                    ext = '.BRIK.gz' if seqType == 'se_e2' else '.BRIK'
                     errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType,
-                                                       spaceTag, runTag, ext=ext, outputDir=outputDir)
+                                                       spaceTag, runTag, outputDir=outputDir)
 
-                    if not os.path.exists(errtsFile):
+                    if not os.path.exists(f"{errtsFile}.HEAD"):
                         f.write(f"{errtsFile} does not exist (legacy name also checked)\n")
                     elif isLegacy:
                         legacyMsg = (f"NOTE: {subj} ses-{ses} {seqType}: no errts under the current naming "

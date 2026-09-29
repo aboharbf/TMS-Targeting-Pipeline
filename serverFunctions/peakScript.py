@@ -57,7 +57,7 @@ for subj in subjVec:
     for ses in sesVec:
         for seqType in seqVec:
             # Files of interest
-            # .BRIK contains data, .HEAD is metadata. Falls back to the pre-rename name if needed.
+            # errts dataset prefix (.HEAD/.BRIK[.gz]); AFNI resolves it. Falls back to the pre-rename name if needed.
             errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag,
                                                outputDir=outputDir)
             dataIDstr = f"{subj}.{ses}.{task}.{seqType}"
