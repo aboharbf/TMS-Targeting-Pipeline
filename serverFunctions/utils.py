@@ -107,7 +107,8 @@ def preprocNames(subj, ses, task, seqType, spaceTag, runTag=''):
     }
 
 
-def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', ext='.BRIK', outputDir=None):
+def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', ext='.BRIK', outputDir=None,
+                 verbose=False):
     """
     Path to a session's errts file, trying the current preprocNames scheme
     first and falling back to the pre-rename (f06) name:
@@ -115,6 +116,7 @@ def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', ext='.B
     The old names carry no run tag, so a fallback hit is untagged output.
     Current-scheme outputs live under outputDir (preprocScript.py's output root),
     or under dataDir if outputDir is None; legacy outputs always live under dataDir.
+    If verbose, reports each candidate path and whether it exists via print_and_log.
 
     Returns:
         (path, isLegacy). If neither exists, the current-scheme path and False.
@@ -124,6 +126,11 @@ def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', ext='.B
     outputSesDir = f"{outputDir or dataDir}/{subj}/ses-{ses}"
     newPath = f"{outputSesDir}/{names['scriptId']}/errts.{names['subjId']}.tproject+tlrc{ext}"
     legacyPath = f"{sesDir}/{subj}.results.task-{task}-{spaceTag}.{seqType}/errts.{subj}.tproject+tlrc{ext}"
+
+    if verbose:
+        print_and_log(f"resolveErrts {subj} ses-{ses} {seqType}:")
+        print_and_log(f"  current: {newPath} [{'found' if os.path.exists(newPath) else 'missing'}]")
+        print_and_log(f"  legacy:  {legacyPath} [{'found' if os.path.exists(legacyPath) else 'missing'}]")
 
     if os.path.exists(newPath) or not os.path.exists(legacyPath):
         return newPath, False

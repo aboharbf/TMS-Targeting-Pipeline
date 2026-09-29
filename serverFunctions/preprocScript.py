@@ -20,7 +20,7 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 slurmLogDir = f'{slurmScriptDir}/logs_{timestamp}'
 
 # -------------------------------------------------------------- configuration
-runTag = 'noclean'                      # Marks this pipeline run's outputs; last '_' field of the base name.
+runTag = 'param'                      # Marks this pipeline run's outputs; last '_' field of the base name.
                                         # No '_' allowed (use '-'), so names split cleanly. '' = no tag.
 
 task = 'rest'
