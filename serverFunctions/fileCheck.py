@@ -31,7 +31,7 @@ subjVec.sort(key=lambda x: int(x))
 subjVec = [s for s in subjVec if int(s) <= 100]
 
 # As a test, just do the first 4
-# subjVec = subjVec[0:3]
+subjVec = subjVec[0:10]
 
 # Assume all subjects have 4 sessions
 sesVec = ['01', '02', '03', '04']
@@ -40,7 +40,8 @@ print(f"Preparing scripts/runs on following subjects: {subjVec}")
 print(f"Total Subject count: {len(subjVec)}")
 
 # Parameter space to explore.
-seqVec = ['se', 'me', 'se_e2'] # 'me'
+# seqVec = ['se', 'me', 'se_e2'] # 'me'
+seqVec = ['me'] # 'me'
 task = 'rest'
 
 # Which preprocessing outputs to check; must match preprocScript.py's settings.

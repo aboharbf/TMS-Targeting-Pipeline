@@ -19,7 +19,7 @@ subjVec = [item for item in os.listdir(dataDir) if os.path.isdir(os.path.join(da
 subjVec.sort(key=lambda x: int(x))
 
 # As a test, just do the first 4
-# subjVec = subjVec[0:3]
+subjVec = subjVec[0:10]
 
 # Assume all subjects have 4 sessions
 sesVec = ['01', '02', '03', '04']
@@ -27,7 +27,8 @@ sesVec = ['01', '02', '03', '04']
 print(f"Preparing scripts/runs on following subjects: {subjVec}")
 
 # Parameter space to explore.
-seqVec = ['se', 'me'] # 'me'
+# seqVec = ['se', 'me'] # 'me'
+seqVec = ['me'] # 'me'
 
 # Generate full path for the target mask. Double brackets act as a placeholder for template formating function.
 maskTemplate = f"{maskDir}/subgenual_{{}}_mask.nii"
@@ -42,7 +43,7 @@ clustMaskPathVec = [clustMaskTemplate.format(cMask) for cMask in clustMaskVec]
 task = 'rest'
 
 # Which preprocessing outputs to read; must match preprocScript.py's settings.
-runTag = 'noclean'
+runTag = 'param'
 spaceTag = spaceTagFromTemplate('MNI152_2009_template.nii.gz')
 
 scriptMode = 0 # the overall script behavior. 0 = slurm, 1 = run in python, 2 = both.
