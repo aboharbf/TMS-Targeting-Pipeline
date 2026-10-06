@@ -11,17 +11,15 @@
 
 import os
 import subprocess
-from utils import run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, resolveErrts
-from pathlib import Path
+import analysisConfig as cfg
+from utils import run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, errtsPrefix, snapshotConfig
+
+# Shared and analysis settings come from analysisConfig.py.
+snapshotConfig(cfg)
 
 # dir paths
-projDir = Path("~").expanduser()
-dataDir = f'{projDir}/nbthetaconn/data'
-outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'   # preprocScript.py's output root; must match.
-maskDir = f'{projDir}/nbthetaconn/masks'
-outDirMain = f'{projDir}/pipeline/results'
-slurmScriptDir = f'{projDir}/pipeline/slurm'
-# consider output dir for final calculations
+dataDir = cfg.dataDir
+outputDir = cfg.outputDir               # preprocScript.py's output root.
 
 # Gather the full range of subjects present in the data directory.
 subjVec = [item for item in os.listdir(dataDir) if os.path.isdir(os.path.join(dataDir, item))]
@@ -33,20 +31,17 @@ subjVec = [s for s in subjVec if int(s) <= 100]
 # As a test, just do the first 4
 subjVec = subjVec[0:10]
 
-# Assume all subjects have 4 sessions
-sesVec = ['01', '02', '03', '04']
+sesVec = cfg.sesVec
 
 print(f"Preparing scripts/runs on following subjects: {subjVec}")
 print(f"Total Subject count: {len(subjVec)}")
 
-# Parameter space to explore.
-# seqVec = ['se', 'me', 'se_e2'] # 'me'
-seqVec = ['me'] # 'me'
-task = 'rest'
+seqVec = cfg.seqTypeVec
+task = cfg.task
 
-# Which preprocessing outputs to check; must match preprocScript.py's settings.
-runTag = 'noclean'
-spaceTag = spaceTagFromTemplate('MNI152_2009_template.nii.gz')
+# Which preprocessing outputs to check.
+runTag = cfg.runTag
+spaceTag = spaceTagFromTemplate(cfg.tlrcBase)
 
 output_file = 'fileCheck_results.txt'
 
@@ -59,17 +54,10 @@ with open(output_file, 'w') as f:
             for subj in subjVec:
                 for ses in sesVec:
                     # Files of interest: errts dataset prefix (.HEAD/.BRIK[.gz]).
-                    # Falls back to the pre-rename name if needed.
-                    errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType,
-                                                       spaceTag, runTag, outputDir=outputDir)
+                    errtsFile = errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, runTag)
 
                     if not os.path.exists(f"{errtsFile}.HEAD"):
-                        f.write(f"{errtsFile} does not exist (legacy name also checked)\n")
-                    elif isLegacy:
-                        legacyMsg = (f"NOTE: {subj} ses-{ses} {seqType}: no errts under the current naming "
-                                     f"(runTag '{runTag}'); found legacy untagged file {errtsFile}")
-                        print_and_log(legacyMsg)
-                        f.write(f"{legacyMsg}\n")
+                        f.write(f"{errtsFile} does not exist\n")
 
 print(f"Results saved to {output_file}")                
 

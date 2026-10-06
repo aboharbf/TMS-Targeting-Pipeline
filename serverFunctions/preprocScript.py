@@ -6,12 +6,13 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames
+import analysisConfig as cfg
+from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames, snapshotConfig
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
-dataDir = f'{projDir}/nbthetaconn/data'         # Inputs (T1, EPIs, sidecars); read only.
-outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'    # Outputs; mirrors dataDir as {subj}/ses-{ses}, {subj}/code.
+dataDir = cfg.dataDir                   # Inputs (T1, EPIs, sidecars); read only.
+outputDir = cfg.outputDir               # Outputs; mirrors dataDir as {subj}/ses-{ses}, {subj}/code.
 
 slurmScriptDir = f'{projDir}/pipeline/slurm_preproc'
 
@@ -20,20 +21,20 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 slurmLogDir = f'{slurmScriptDir}/logs_{timestamp}'
 
 # -------------------------------------------------------------- configuration
-runTag = 'param'                      # Marks this pipeline run's outputs; last '_' field of the base name.
-                                        # No '_' allowed (use '-'), so names split cleanly. '' = no tag.
+# Shared and analysis settings come from analysisConfig.py.
+snapshotConfig(cfg)
 
-task = 'rest'
-seqType = 'me'                          # first '.' field after the base name; also the results dir suffix
-sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
+runTag = cfg.runTag
+task = cfg.task
+seqType = 'me'                          # Not cfg.seqTypeVec: the afni_proc command below is multi-echo only.
+sesVec = cfg.sesVec
 
-jobs = 8                               # -jobs for 3dDeconvolve, and --cpus-per-task
-memPerCpu = 8                          # GB per CPU, same as f06's --mem-per-cpu=8G
-memPerJob = f'{memPerCpu * jobs}G'      # TOTAL memory (64G at 8 jobs).
-timePerJob = '24:00:00'
+jobs = cfg.preprocCpus                  # -jobs for 3dDeconvolve, and --cpus-per-task
+memPerJob = cfg.preprocMem              # TOTAL memory
+timePerJob = cfg.preprocTime
 
-tlrcBase = 'MNI152_2009_template.nii.gz'
-firstTRs = 4
+tlrcBase = cfg.tlrcBase
+firstTRs = cfg.firstTRs
 spaceTag = spaceTagFromTemplate(tlrcBase)   # 'mni' for the MNI152_2009 template.
 
 # File/dir naming lives in utils.preprocNames:
@@ -186,7 +187,7 @@ for subj in subjVec:
             "-combine_method m_tedana",
             "-reg_echo 2",
             "-blur_in_mask yes",
-            "-blur_size 4",
+            f"-blur_size {cfg.preprocBlur}",
             "-mask_segment_anat yes",
             "-mask_segment_erode yes",
             "-regress_motion_per_run",
@@ -194,8 +195,8 @@ for subj in subjVec:
             "-regress_ROI_PC WMe 1",
             "-regress_ROI_PC CSFe 1",
             "-regress_ROI_PC brain 1",
-            "-regress_censor_motion 0.3",
-            "-regress_censor_outliers 0.15",
+            f"-regress_censor_motion {cfg.preprocCensorMotion}",
+            f"-regress_censor_outliers {cfg.preprocCensorOutliers}",
             "-regress_apply_mask",
             "-regress_run_clustsim no",
             "-regress_opts_3dD -GOFORIT 10",

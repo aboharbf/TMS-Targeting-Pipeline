@@ -21,7 +21,7 @@
 #   merge           once per FWHM x motion     3dTproject -> errts
 #
 # Outputs: one results dir per combination, next to the base one, named so
-# utils.preprocNames / resolveErrts find it with runTag = <baseTag>-<varTag>:
+# utils.preprocNames / errtsPrefix find it with runTag = <baseTag>-<varTag>:
 #   base     {baseId}.{seqType}                 e.g. ..._mni_param.me
 #   variant  {baseId}-b{F}m{M}.{seqType}        e.g. ..._mni_param-b4m0p3.me
 # '.' in a value becomes 'p' (0.3 -> 0p3), since '.' separates name fields.

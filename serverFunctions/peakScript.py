@@ -2,15 +2,17 @@
 
 import os
 import subprocess
-from utils import run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, resolveErrts
 from pathlib import Path
 
-# dir paths
+import analysisConfig as cfg
+from utils import (run_and_log, print_and_log, slurmScriptLogger, spaceTagFromTemplate, errtsPrefix,
+                   variantRunTag, snapshotConfig)
+
+# dir paths; shared and analysis settings come from analysisConfig.py.
 projDir = Path("~").expanduser()
-dataDir = f'{projDir}/nbthetaconn/data'
-outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'   # preprocScript.py's output root; must match.
-maskDir = f'{projDir}/nbthetaconn/masks'
-outDirMain = f'{projDir}/pipeline/results'
+dataDir = cfg.dataDir
+outputDir = cfg.outputDir               # preprocScript.py's output root.
+outDirMain = cfg.resultsDir
 slurmScriptDir = f'{projDir}/pipeline/slurm'
 # consider output dir for final calculations
 
@@ -21,30 +23,28 @@ subjVec.sort(key=lambda x: int(x))
 # As a test, just do the first 4
 subjVec = subjVec[0:10]
 
-# Assume all subjects have 4 sessions
-sesVec = ['01', '02', '03', '04']
+# Record the config next to the session log and in each subject's results folder.
+snapshotConfig(cfg, extraDirs=[f"{outDirMain}/{subj}" for subj in subjVec])
+
+sesVec = cfg.sesVec
 
 print(f"Preparing scripts/runs on following subjects: {subjVec}")
 
-# Parameter space to explore.
-# seqVec = ['se', 'me'] # 'me'
-seqVec = ['me'] # 'me'
+seqVec = cfg.seqTypeVec
 
-# Generate full path for the target mask. Double brackets act as a placeholder for template formating function.
-maskTemplate = f"{maskDir}/subgenual_{{}}_mask.nii"
-maskTypeVec = ['seed', 'network'] # 'network', Anatomical vs network based sgACC activity identification.
-maskPathVec = [maskTemplate.format(maskT) for maskT in maskTypeVec] 
+# Full paths for the sgACC target masks and the dlPFC cluster search masks.
+maskTypeVec = cfg.maskTypeVec
+maskPathVec = [cfg.sgaccMaskTemplate.format(maskT) for maskT in maskTypeVec]
+clustMaskVec = cfg.clustMaskVec
+clustMaskPathVec = [cfg.clustMaskTemplate.format(cMask) for cMask in clustMaskVec]
 
-# Generate full path for the cluster search mask
-clustMaskTemplate = f"{maskDir}/Parcels_MNI_222.resam.ldlpfc.neurosynth.{{}}.nii"
-clustMaskVec = ['orig', 'dilate_5', 'erode_1']
-clustMaskPathVec = [clustMaskTemplate.format(cMask) for cMask in clustMaskVec]
+task = cfg.task
 
-task = 'rest'
-
-# Which preprocessing outputs to read; must match preprocScript.py's settings.
-runTag = 'param'
-spaceTag = spaceTagFromTemplate('MNI152_2009_template.nii.gz')
+# Which preprocessing outputs to read: the base run, then every grid variant
+# (paramScript.py), so all of them are compared under the same peak search.
+runTag = cfg.runTag
+runTagVec = [runTag] + [variantRunTag(runTag, fwhm, mot) for fwhm in cfg.fwhmVec for mot in cfg.motVec]
+spaceTag = spaceTagFromTemplate(cfg.tlrcBase)
 
 scriptMode = 0 # the overall script behavior. 0 = slurm, 1 = run in python, 2 = both.
 
@@ -58,109 +58,118 @@ for subj in subjVec:
     for ses in sesVec:
         for seqType in seqVec:
             # Files of interest
-            # errts dataset prefix (.HEAD/.BRIK[.gz]); AFNI resolves it. Falls back to the pre-rename name if needed.
-            errtsFile, isLegacy = resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag,
-                                               outputDir=outputDir)
-            dataIDstr = f"{subj}.{ses}.{task}.{seqType}"
+            # errts dataset prefix (.HEAD/.BRIK[.gz]) for each run tag; AFNI resolves it.
+            errtsByTag = {tag: errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, tag) for tag in runTagVec}
+            missingTags = [tag for tag in runTagVec if not os.path.exists(f"{errtsByTag[tag]}.HEAD")]
+            foundTags = [tag for tag in runTagVec if tag not in missingTags]
+            if not foundTags:
+                print_and_log(f"SKIP: {subj} ses-{ses} {seqType}: no errts for any of {len(runTagVec)} run tags")
+                continue
+            if missingTags:
+                print_and_log(f"NOTE: {subj} ses-{ses} {seqType}: errts missing for {len(missingTags)} of "
+                              f"{len(runTagVec)} run tags, skipping those: {' '.join(missingTags)}")
+
+            sesIDstr = f"{subj}.{ses}.{task}.{seqType}"
             run_and_log(f"echo ### Starting Subject {subj}, session {ses} ###, sequence type {seqType}")
 
-            logger = slurmScriptLogger(dataIDstr, slurmScriptDir, job_name=f"plu{subj}")
+            # One job script per subject/session/seqType, covering every run tag found.
+            logger = slurmScriptLogger(sesIDstr, slurmScriptDir, job_name=f"plu{subj}")
 
-            if isLegacy:
-                legacyMsg = (f"NOTE: {subj} ses-{ses} {seqType}: no errts under the current naming "
-                             f"(runTag '{runTag}'); using legacy untagged file {errtsFile}")
-                print_and_log(legacyMsg)
-                logger.append(f'echo "{legacyMsg}"')
+            for tag in foundTags:
+                errtsFile = errtsByTag[tag]
+                # Run tag as the 5th field, so each variant's outputs get their own names.
+                dataIDstr = sesIDstr + (f".{tag}" if tag else '')
+                run_and_log(f"echo ### Run tag {tag}")
 
-            for tMask, maskPath in zip(maskTypeVec, maskPathVec):
-                # for the mask of interest, generate the trace to be correlated against now.
-                run_and_log(f"echo ### ### Generating mask of target activity using sgACC {tMask} mask")
+                for tMask, maskPath in zip(maskTypeVec, maskPathVec):
+                    # for the mask of interest, generate the trace to be correlated against now.
+                    run_and_log(f"echo ### ### Generating mask of target activity using sgACC {tMask} mask")
                         
-                avgPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.1d"
+                    avgPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.1d"
 
-                # Step 1 - average across the sgACC mask, creating a single time series.
-                # This time series will be the object of correlation
+                    # Step 1 - average across the sgACC mask, creating a single time series.
+                    # This time series will be the object of correlation
 
-                bsCmd = rf"3dmaskave -quiet -mask {maskPath} {errtsFile} > {avgPath}"
+                    bsCmd = rf"3dmaskave -quiet -mask {maskPath} {errtsFile} > {avgPath}"
                 
-                # Add a check to see if the avgPath file already exists. If so, skip.
-                if os.path.exists(avgPath):
-                    run_and_log(rf"echo {avgPath} already exists. Will not rerun 3dmaskave")
-                elif scriptMode > 0:
-                    run_and_log(bsCmd)
-
-                if scriptMode != 1:
-                    slurmCmd = f"""[ -f {avgPath} ] || {bsCmd}"""
-                    logger.append(slurmCmd)
-
-                for cMask, cMaskPath in zip(clustMaskVec, clustMaskPathVec):
-
-                    run_and_log(f"### ### ### performing cluster search in dlPFC {cMask} mask")
-
-                    # The path below defines the mask to be used prior to a cluster search - for now, left dlPFC.
-                    # clustMaskPath = f"{maskDir}/Parcels_MNI_222.resam.ldlpfc.neurosynth.{cMask}.nii"
-
-                    # Output paths
-                    #corrPath = f"{outDir}/{dataIDstr}.errts.targ.{mask}.fischer.clust.ldlpfc.{cMask}.nii" # Future name when corr include -mask
-
-                    # For now, 2 distinct output paths - corrPath for brain wide, corrMaskPath for masked to target.
-                    corrPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.nii" # Output file for brain wide correlations to target trace.
-                    corrMaskPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.clust.ldlpfc.{cMask}.nii"
-                    # Once the masked correlation map is generated, identify clusters within.
-                    corrClustOutPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.clust.ldlpfc.{cMask}.1d" # Coordinates for the desired cluster outputs.
-
-                    # Step 2 - correlate with the whole brain
-                    # - prefix appears to be a way to denote the entire output file name.
-                    # could be improved upon using the -mask fxn with the dlPFC mask here.
-
-                    bsCmd2 = rf"3dTcorr1D -Fisher -prefix {corrPath} {errtsFile} {avgPath}"
-                    if os.path.exists(corrPath):
-                        run_and_log(rf"echo {corrPath} already exists. Will not run 3dTcorr1D")
+                    # Add a check to see if the avgPath file already exists. If so, skip.
+                    if os.path.exists(avgPath):
+                        run_and_log(rf"echo {avgPath} already exists. Will not rerun 3dmaskave")
                     elif scriptMode > 0:
-                        run_and_log(bsCmd2)
+                        run_and_log(bsCmd)
 
                     if scriptMode != 1:
-                        slurmCmd2 = f"""[ -f {corrPath} ] || {bsCmd2}"""
-                        logger.append(slurmCmd2)
+                        slurmCmd = f"""[ -f {avgPath} ] || {bsCmd}"""
+                        logger.append(slurmCmd)
+
+                    for cMask, cMaskPath in zip(clustMaskVec, clustMaskPathVec):
+
+                        run_and_log(f"### ### ### performing cluster search in dlPFC {cMask} mask")
+
+                        # The path below defines the mask to be used prior to a cluster search - for now, left dlPFC.
+                        # clustMaskPath = f"{maskDir}/Parcels_MNI_222.resam.ldlpfc.neurosynth.{cMask}.nii"
+
+                        # Output paths
+                        #corrPath = f"{outDir}/{dataIDstr}.errts.targ.{mask}.fischer.clust.ldlpfc.{cMask}.nii" # Future name when corr include -mask
+
+                        # For now, 2 distinct output paths - corrPath for brain wide, corrMaskPath for masked to target.
+                        corrPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.nii" # Output file for brain wide correlations to target trace.
+                        corrMaskPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.clust.ldlpfc.{cMask}.nii"
+                        # Once the masked correlation map is generated, identify clusters within.
+                        corrClustOutPath = f"{outDir}/{dataIDstr}.errts.targ.{tMask}.fisher.clust.ldlpfc.{cMask}.1d" # Coordinates for the desired cluster outputs.
+
+                        # Step 2 - correlate with the whole brain
+                        # - prefix appears to be a way to denote the entire output file name.
+                        # could be improved upon using the -mask fxn with the dlPFC mask here.
+
+                        bsCmd2 = rf"3dTcorr1D -Fisher -prefix {corrPath} {errtsFile} {avgPath}"
+                        if os.path.exists(corrPath):
+                            run_and_log(rf"echo {corrPath} already exists. Will not run 3dTcorr1D")
+                        elif scriptMode > 0:
+                            run_and_log(bsCmd2)
+
+                        if scriptMode != 1:
+                            slurmCmd2 = f"""[ -f {corrPath} ] || {bsCmd2}"""
+                            logger.append(slurmCmd2)
                     
-                    # Varies depending on the size/nature of the dlPFC mask
-                    # mask will dilate/erode, consider additional loops here to consider this.
+                        # Varies depending on the size/nature of the dlPFC mask
+                        # mask will dilate/erode, consider additional loops here to consider this.
 
-                    # Step 3 - mask by the dlPFC.
-                    bsCmd3 = rf"""3dcalc -a {corrPath} -b {cMaskPath} -expr "abs(a*ispositive(b-.5))" -prefix {corrMaskPath}"""
-                    if os.path.exists(corrMaskPath):
-                        run_and_log(rf"echo {corrMaskPath} already exists. Will not run 3dcalc masking procedure")
-                    elif scriptMode > 0:
-                        run_and_log(bsCmd3)
+                        # Step 3 - mask by the dlPFC.
+                        bsCmd3 = rf"""3dcalc -a {corrPath} -b {cMaskPath} -expr "abs(a*ispositive(b-.5))" -prefix {corrMaskPath}"""
+                        if os.path.exists(corrMaskPath):
+                            run_and_log(rf"echo {corrMaskPath} already exists. Will not run 3dcalc masking procedure")
+                        elif scriptMode > 0:
+                            run_and_log(bsCmd3)
 
-                    if scriptMode != 1:
-                        slurmCmd3 = f"""[ -f {corrMaskPath} ] || {bsCmd3}"""
-                        logger.append(slurmCmd3)
+                        if scriptMode != 1:
+                            slurmCmd3 = f"""[ -f {corrMaskPath} ] || {bsCmd3}"""
+                            logger.append(slurmCmd3)
 
 
-                    # Step 4 - Identify the appropriate clusters
-                    # The best spot won't likely come from a simple 'max' function.
-                    # consider smoothing/softmax.
-                    # per AFNI docs, might want to update to 3dClusterize.
-                    # tee at the end is the final output, 1d file.
-                    # The series of |'s at the end is for saving outputs to various objects.
+                        # Step 4 - Identify the appropriate clusters
+                        # The best spot won't likely come from a simple 'max' function.
+                        # consider smoothing/softmax.
+                        # per AFNI docs, might want to update to 3dClusterize.
+                        # tee at the end is the final output, 1d file.
+                        # The series of |'s at the end is for saving outputs to various objects.
 
-                    bsCmd4 = rf"""3dclust -quiet -orient RAI -1clip .01 3.5 2 {corrMaskPath} \
-                           | head -n1 \
-                           | tr -s ' ' \
-                           | cut -d" " -f15-17 \
-                           | tee {corrClustOutPath}""" 
+                        bsCmd4 = rf"""3dclust -quiet -orient RAI -1clip .01 3.5 2 {corrMaskPath} \
+                               | head -n1 \
+                               | tr -s ' ' \
+                               | cut -d" " -f15-17 \
+                               | tee {corrClustOutPath}""" 
 
-                    if os.path.exists(corrClustOutPath):
-                        run_and_log(rf"echo {corrClustOutPath} already exists. Will not run 3dclust")
-                    elif scriptMode > 0:
-                        run_and_log(bsCmd4)
+                        if os.path.exists(corrClustOutPath):
+                            run_and_log(rf"echo {corrClustOutPath} already exists. Will not run 3dclust")
+                        elif scriptMode > 0:
+                            run_and_log(bsCmd4)
 
-                    if scriptMode != 1:
-                        slurmCmd4 = f"""[ -f {corrClustOutPath} ] || {bsCmd4}"""
-                        logger.append(slurmCmd4)
+                        if scriptMode != 1:
+                            slurmCmd4 = f"""[ -f {corrClustOutPath} ] || {bsCmd4}"""
+                            logger.append(slurmCmd4)
                     
-                    compStr = f"echo ######### Completed processing Subj-{subj} ses-{ses} seq-{seqType} with sgACC {tMask}, dlPFC {cMask} ########"
-                    run_and_log(compStr)
-                    logger.append(compStr)
+                        compStr = f"echo ######### Completed processing Subj-{subj} ses-{ses} seq-{seqType} run-{tag} with sgACC {tMask}, dlPFC {cMask} ########"
+                        run_and_log(compStr)
+                        logger.append(compStr)
 

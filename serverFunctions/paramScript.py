@@ -8,7 +8,7 @@ done are skipped here and again inside f07, so re-running is safe.
 
 Variant naming matches f07 and utils.preprocNames: the variant run tag is the
 base run tag plus '-b{F}m{M}' ('.' -> 'p'), e.g. 'param' -> 'param-b4m0p3',
-so peakScript.py / fileCheck.py read a variant by setting runTag to that.
+so peakScript.py / fileCheck.py read a variant by that run tag.
 """
 
 import os
@@ -17,12 +17,14 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames
+import analysisConfig as cfg
+from utils import (slurmScriptLogger, spaceTagFromTemplate, preprocNames, errtsPrefix,
+                   variantTag, variantRunTag, snapshotConfig)
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
-dataDir = f'{projDir}/nbthetaconn/data'                             # Inputs; only used for the subject list.
-outputDir = f'{projDir}/nbthetaconn/analysis_out/pipeline_params'    # preprocScript.py's output root; must match.
+dataDir = cfg.dataDir                   # Inputs; only used for the subject list.
+outputDir = cfg.outputDir               # preprocScript.py's output root.
 
 workerScript = f'{projDir}/pipeline/scripts/x07.blur_censor_param.csh'       # The tcsh worker, as deployed on the server.
 
@@ -33,39 +35,26 @@ timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 slurmLogDir = f'{slurmScriptDir}/logs_{timestamp}'
 
 # -------------------------------------------------------------- configuration
-runTag = 'param'                        # Run tag of the BASE run to start from (preprocScript.py's runTag).
+# Shared and analysis settings come from analysisConfig.py.
+snapshotConfig(cfg)
 
-task = 'rest'
-seqTypeVec = ['me']                     # first '.' field after the base name; also the results dir suffix
-sesVec = ['01', '02', '03', '04']
+runTag = cfg.runTag                     # Run tag of the BASE run to start from.
+task = cfg.task
+seqTypeVec = cfg.seqTypeVec
+sesVec = cfg.sesVec
+spaceTag = spaceTagFromTemplate(cfg.tlrcBase)
 
-tlrcBase = 'MNI152_2009_template.nii.gz'
-spaceTag = spaceTagFromTemplate(tlrcBase)
+fwhmVec = cfg.fwhmVec                   # The grid; see analysisConfig.py.
+motVec = cfg.motVec
 
-# Parameter grid. Strings, written exactly as they should appear in the names
-# ('4', not 4.0), since f07 builds the same names from the same text.
-fwhmVec = ['0', '2', '4', '6', '8']                   # 3dBlurInMask -FWHM; '0' = no blur
-motVec = ['0', '0.15', '0.3', '0.45', '0.6']          # 1d_tool.py -censor_motion limit
-
-cpus = 4                                # --cpus-per-task and OMP_NUM_THREADS
-memPerJob = '16G'                       # TOTAL memory; 3dpc holds both runs at once
-timePerJob = '04:00:00'                 # whole grid for one subject-session
+cpus = cfg.paramCpus                    # --cpus-per-task and OMP_NUM_THREADS
+memPerJob = cfg.paramMem                # TOTAL memory
+timePerJob = cfg.paramTime
 
 dryRun = False                          # True = report only, write nothing.
 submit = True                           # True = sbatch each script as it's written, False = write only.
 maxJobs = 200                           # Wait while more than this many of your jobs are queued.
 waitSec = 60                            # How long to sleep between queue checks.
-
-
-def variantTag(fwhm, mot):
-    """Variant part of the run tag, as f07 builds it: b{F}m{M}, '.' -> 'p'."""
-    return f"b{fwhm}m{mot}".replace('.', 'p')
-
-
-def variantRunTag(fwhm, mot):
-    """Full run tag of a variant; f07 joins it to an untagged base with '_' instead."""
-    tag = variantTag(fwhm, mot)
-    return f"{runTag}-{tag}" if runTag else tag
 
 
 # ------------------------------------------------------------------- subjects
@@ -135,9 +124,8 @@ for subj in subjVec:
             todo = []
             for fwhm in fwhmVec:
                 for mot in motVec:
-                    varNames = preprocNames(subj, ses, task, seqType, spaceTag, variantRunTag(fwhm, mot))
-                    varErrts = f"{outputSesDir}/{varNames['scriptId']}/errts.{subjId}.tproject+tlrc.HEAD"
-                    if not os.path.exists(varErrts):
+                    varErrts = errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, variantRunTag(runTag, fwhm, mot))
+                    if not os.path.exists(f"{varErrts}.HEAD"):
                         todo.append(variantTag(fwhm, mot))
             if not todo:
                 print(f"{subj} ses-{ses} {seqType}: all {len(fwhmVec) * len(motVec)} variants done - skipping")
@@ -208,6 +196,6 @@ if submit and not dryRun:
     print(f"Submitted {nSubmitted} job(s); check them with: squeue --me")
     if nSubmitted:
         print(f"Job .o/.e files will be in {slurmLogDir}")
-print("\nVariant run tags (set runTag in peakScript.py / fileCheck.py to read one):")
+print("\nVariant run tags:")
 for fwhm in fwhmVec:
-    print("  " + "  ".join(variantRunTag(fwhm, mot) for mot in motVec))
+    print("  " + "  ".join(variantRunTag(runTag, fwhm, mot) for mot in motVec))

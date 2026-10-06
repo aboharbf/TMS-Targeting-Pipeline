@@ -2,6 +2,8 @@ import subprocess
 import logging
 import os
 import re
+import shutil
+import hashlib
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -71,6 +73,25 @@ def print_and_log(message):
     file_logger.info(message)
 
 
+def snapshotConfig(cfg, extraDirs=()):
+    """
+    Copy the config module this run imported (pass the module itself) next to
+    the session log, and into each of extraDirs (created if needed), as
+    session_<timestamp>.<name>.py, and log its source path and sha256.
+    Copying cfg.__file__ guarantees the copy is the file actually used, not
+    another one of the same name. The timestamp matches the session log's, so
+    copies from different runs never overwrite each other.
+    """
+    src = Path(cfg.__file__)
+    digest = hashlib.sha256(src.read_bytes()).hexdigest()
+    print_and_log(f"Config: {src} (sha256 {digest})")
+    for d in [logDir, *extraDirs]:
+        os.makedirs(d, exist_ok=True)
+        dst = Path(d) / f"session_{timestamp}.{src.name}"
+        shutil.copy2(src, dst)
+        print_and_log(f"  saved to {dst}")
+
+
 def spaceTagFromTemplate(tlrcBase):
     """
     Space field of the preprocessing base name, derived from the afni_proc
@@ -107,36 +128,43 @@ def preprocNames(subj, ses, task, seqType, spaceTag, runTag=''):
     }
 
 
-def resolveErrts(dataDir, subj, ses, task, seqType, spaceTag, runTag='', outputDir=None, verbose=False):
-    """
-    AFNI prefix of a session's errts dataset, trying the current preprocNames scheme
-    first and falling back to the pre-rename (f06) name:
-        {subj}.results.task-{task}-{space}.{seqType}/errts.{subj}.tproject+tlrc
-    The old names carry no run tag, so a fallback hit is untagged output.
-    Current-scheme outputs live under outputDir (preprocScript.py's output root),
-    or under dataDir if outputDir is None; legacy outputs always live under dataDir.
-    Existence is checked on the .HEAD, since the .BRIK may or may not be gzipped;
-    AFNI commands accept the returned prefix either way.
-    If verbose, reports each candidate path and whether it exists via print_and_log.
+def variantTag(fwhm, mot):
+    """Variant part of a grid run tag, as x07 builds it: b{F}m{M}, '.' -> 'p'."""
+    return f"b{fwhm}m{mot}".replace('.', 'p')
 
-    Returns:
-        (prefix, isLegacy). If neither exists, the current-scheme prefix and False.
+
+def variantRunTag(runTag, fwhm, mot):
+    """Full run tag of a grid variant of base run runTag; x07 joins it to an untagged base with '_' instead."""
+    tag = variantTag(fwhm, mot)
+    return f"{runTag}-{tag}" if runTag else tag
+
+
+def decodeRunTag(tag, baseTag, baseFwhm, baseMotion):
+    """
+    fwhm and motion censor limit a run tag stands for, as floats; (None, None) if unknown.
+    A grid variant ends in variantTag's 'b{F}m{M}' ('p' -> '.'). The base run tag
+    carries no values, so baseFwhm/baseMotion (its afni_proc settings) are used.
+    An empty tag (results named before the run tag was added) is unknown.
+    """
+    if not tag:
+        return None, None
+    match = re.search(r'(?:^|-)b(\d+(?:p\d+)?)m(\d+(?:p\d+)?)$', tag)
+    if match:
+        return float(match.group(1).replace('p', '.')), float(match.group(2).replace('p', '.'))
+    if tag == baseTag:
+        return float(baseFwhm), float(baseMotion)
+    return None, None
+
+
+def errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
+    """
+    AFNI prefix of a session's errts dataset under outputDir (preprocScript.py's
+    output root), named by preprocNames. There is deliberately no fallback to other
+    names: the caller checks f"{prefix}.HEAD" (the .BRIK may or may not be gzipped)
+    and treats a missing file as missing.
     """
     names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
-    sesDir = f"{dataDir}/{subj}/ses-{ses}"
-    outputSesDir = f"{outputDir or dataDir}/{subj}/ses-{ses}"
-    newPath = f"{outputSesDir}/{names['scriptId']}/errts.{names['subjId']}.tproject+tlrc"
-    legacyPath = f"{sesDir}/{subj}.results.task-{task}-{spaceTag}.{seqType}/errts.{subj}.tproject+tlrc"
-    newExists, legacyExists = (os.path.exists(f"{p}.HEAD") for p in (newPath, legacyPath))
-
-    if verbose:
-        print_and_log(f"resolveErrts {subj} ses-{ses} {seqType}:")
-        print_and_log(f"  current: {newPath}.HEAD [{'found' if newExists else 'missing'}]")
-        print_and_log(f"  legacy:  {legacyPath}.HEAD [{'found' if legacyExists else 'missing'}]")
-
-    if newExists or not legacyExists:
-        return newPath, False
-    return legacyPath, True
+    return f"{outputDir}/{subj}/ses-{ses}/{names['scriptId']}/errts.{names['subjId']}.tproject+tlrc"
 
 
 class slurmScriptLogger:
@@ -228,7 +256,7 @@ class slurmScriptLogger:
 def extract_filename_variables(filename):
     """
     Extract variables from filename using split.
-    Expected format: subjectNumber.sessionNumber.task.sequenceType.1d
+    Expected format: subjectNumber.sessionNumber.task.sequenceType[.runTag].errts....1d
     Example: 101.2.nback.random.1d -> subject=101, session=2, task=rest, sequence=random
     """
     # Remove file extension first
@@ -249,7 +277,10 @@ def extract_filename_variables(filename):
         result['session'] = None
         result['task'] = None
         result['sequence_type'] = None
-    
+
+    # 5th field is the run tag; names from before it was added have 'errts' there.
+    result['runTag'] = parts[4] if len(parts) >= 5 and parts[4] != 'errts' else ''
+
     # Extract field after 'targ', which defines target activity source.
     result['target'] = None
     try:
