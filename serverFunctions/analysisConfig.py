@@ -26,6 +26,7 @@ task = 'rest'
 seqTypeVec = ['me']                     # first '.' field after the base name; also the results dir suffix
 sesVec = ['01', '02', '03', '04']       # assume all subjects have 4 sessions
 tlrcBase = 'MNI152_2009_template.nii.gz'
+nEchoes = 3                             # echoes per multi-echo run; utils.rawSession requires exactly this many
 
 # ------------------------------------------- preprocessing vs. parameter grid
 # Base run (preprocScript.py -> afni_proc.py). These define what runTag means:
@@ -57,5 +58,6 @@ preprocMem = '64G'                      # 8G per CPU, as f06
 preprocTime = '24:00:00'
 
 paramCpus = 2                           # --cpus-per-task and OMP_NUM_THREADS
-paramMem = '16G'                        # 3dpc holds both runs at once
-paramTime = '04:00:00'                  # whole grid for one subject-session
+paramMem = '8G'                         # 3dpc holds both runs at once; peak ~4.5G per session (subject 001, 2026-10-05)
+paramTime = '12:00:00'                  # whole grid for all of a subject's sessions, run in turn;
+                                        # 1:26 - 1:46 per session (subject 001), so ~7h for 4

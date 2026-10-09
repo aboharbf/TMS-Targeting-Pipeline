@@ -1,13 +1,11 @@
 import os
-import glob
-import json
 import time
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 import analysisConfig as cfg
-from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames, snapshotConfig
+from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames, snapshotConfig, rawT1, rawSession
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
@@ -101,45 +99,24 @@ for subj in subjVec:
             nDone += 1
             continue
 
-        # Grab the T1
-        t1Vec = sorted(glob.glob(f"{dataDir}/{subj}/anat/{subj}_T1fs_conform.nii*"))
+        # Raw inputs, found and checked by utils.rawT1 / rawSession, the same
+        # rules pipelineCheck.py reports with.
+        t1Vec = rawT1(dataDir, subj)
         if not t1Vec:
             print(f"{subj}: no T1 found - skipping ses-{ses}")
             nSkipped += 1
             continue
 
-        # Grab the epis.
-        # sorted() everywhere below: glob returns directory order, which is
-        # arbitrary on the server, and the echoes have to stay lined up with the
-        # echo times read further down.
-        run1epi = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-01*ap_e?.nii"))
-        run2epi = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-02*ap_e?.nii"))
-        if not run1epi or not run2epi:
-            print(f"{subj} ses-{ses}: missing EPIs "
-                  f"(run-01: {len(run1epi)}, run-02: {len(run2epi)}) - skipping")
+        raw = rawSession(dataDir, subj, ses, task, cfg.nEchoes)
+        if raw['problems']:
+            print(f"{subj} ses-{ses}: {', '.join(raw['problems'])} - skipping")
             nSkipped += 1
             continue
 
-        if len(run2epi) != len(run1epi):
-            print(f"{subj} ses-{ses}: echo count differs between runs "
-                  f"(run-01: {len(run1epi)}, run-02: {len(run2epi)}) - skipping")
-            nSkipped += 1
-            continue
-
-        # Echo times in ms, read straight out of the BIDS sidecars.
-        echoTimes = []
-        for jsonPath in sorted(glob.glob(f"{sesDir}/func_task-{task}_run-01*ap_e?.json")):
-            with open(jsonPath) as fh:
-                echoTimeSec = json.load(fh)["EchoTime"]
-            echoTimeMs = f"{round(echoTimeSec * 1000, 4):g}"
-            print(f"  {os.path.basename(jsonPath)}: {echoTimeMs} ms")
-            echoTimes.append(echoTimeMs)
-
-        if len(echoTimes) != len(run1epi):
-            print(f"{subj} ses-{ses}: {len(echoTimes)} echo times for "
-                  f"{len(run1epi)} echoes - skipping")
-            nSkipped += 1
-            continue
+        run1epi = raw['run1epi']
+        run2epi = raw['run2epi']
+        echoTimes = raw['echoTimes']
+        print(f"  echo times: {' '.join(echoTimes)} ms")
 
         if dryRun:
             print(f"{subj} ses-{ses}: would generate job script")

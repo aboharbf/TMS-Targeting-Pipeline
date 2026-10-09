@@ -2,6 +2,8 @@ import subprocess
 import logging
 import os
 import re
+import glob
+import json
 import shutil
 import hashlib
 import pandas as pd
@@ -100,6 +102,85 @@ def spaceTagFromTemplate(tlrcBase):
     if os.path.basename(tlrcBase) == 'MNI152_2009_template.nii.gz':
         return 'mni'
     raise ValueError(f"no space tag defined for tlrcBase '{tlrcBase}'")
+
+
+def rawT1(dataDir, subj):
+    """
+    The subject's T1 (afni_proc -copy_anat), sorted; preprocScript.py uses the
+    first match, so an empty list means missing.
+    """
+    return sorted(glob.glob(f"{dataDir}/{subj}/anat/{subj}_T1fs_conform.nii*"))
+
+
+def rawSession(dataDir, subj, ses, task, nEchoes):
+    """
+    Find and check one session's raw inputs, by the rules preprocScript.py applies
+    before writing a job. pipelineCheck.py reports the same result, so 'found'
+    there means preprocScript will accept the session.
+
+    Rules: run-01 and run-02 each have exactly nEchoes echo files, and run-01 has
+    nEchoes sidecars that all hold an EchoTime. run-02's sidecars aren't used, so
+    their count is only noted.
+
+    Returns a dict:
+        checks     list of (item, status, detail), in report order; status is
+                   'found', 'missing' (none there), 'bad' (wrong count or
+                   unreadable) or 'note' (not used by preprocScript, so not blocking)
+        problems   'missing/bad item (detail)' per blocking check; empty = usable
+        run1epi, run2epi   echo files, sorted so they line up with echoTimes
+        echoTimes  run-01 echo times in ms, as strings for -echo_times
+    """
+    sesDir = f"{dataDir}/{subj}/ses-{ses}"
+    out = {'checks': [], 'problems': [], 'run1epi': [], 'run2epi': [], 'echoTimes': []}
+
+    def check(item, status, detail=''):
+        out['checks'].append((item, status, detail))
+        if status in ('missing', 'bad'):
+            out['problems'].append(f"{status} {item} ({detail})" if detail else f"{status} {item}")
+
+    if not os.path.isdir(sesDir):
+        check('session directory', 'missing')
+        return out
+
+    # sorted() everywhere below: glob returns directory order, which is
+    # arbitrary on the server, and the echoes have to stay lined up with the
+    # echo times read further down.
+    for run, key in (('01', 'run1epi'), ('02', 'run2epi')):
+        epis = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-{run}*ap_e?.nii"))
+        out[key] = epis
+        if not epis:
+            check(f"run-{run}", 'missing')
+        elif len(epis) != nEchoes:
+            check(f"run-{run}", 'bad', f"{len(epis)} echoes, need {nEchoes}")
+        else:
+            check(f"run-{run}", 'found', f"{len(epis)} echoes")
+
+    # Echo times in ms, read straight out of the run-01 BIDS sidecars.
+    jsons = sorted(glob.glob(f"{sesDir}/func_task-{task}_run-01*ap_e?.json"))
+    unreadable = []
+    for jsonPath in jsons:
+        try:
+            with open(jsonPath) as fh:
+                echoTimeSec = json.load(fh)["EchoTime"]
+            out['echoTimes'].append(f"{round(echoTimeSec * 1000, 4):g}")
+        except (OSError, ValueError, KeyError, TypeError):
+            unreadable.append(os.path.basename(jsonPath))
+    if not jsons:
+        check('run-01 sidecars', 'missing')
+    elif unreadable:
+        check('run-01 sidecars', 'bad', f"no readable EchoTime in {', '.join(unreadable)}")
+    elif len(jsons) != nEchoes:
+        check('run-01 sidecars', 'bad', f"{len(jsons)}, need {nEchoes}")
+    else:
+        check('run-01 sidecars', 'found', f"EchoTime {' '.join(out['echoTimes'])} ms")
+
+    jsons2 = glob.glob(f"{sesDir}/func_task-{task}_run-02*ap_e?.json")
+    if len(jsons2) == nEchoes:
+        check('run-02 sidecars', 'found', f"{len(jsons2)}")
+    else:
+        check('run-02 sidecars', 'note', f"{len(jsons2)}, expected {nEchoes}")
+
+    return out
 
 
 def preprocNames(subj, ses, task, seqType, spaceTag, runTag=''):
