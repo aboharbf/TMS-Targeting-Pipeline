@@ -244,8 +244,91 @@ def errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
     names: the caller checks f"{prefix}.HEAD" (the .BRIK may or may not be gzipped)
     and treats a missing file as missing.
     """
+    return preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)['errts']
+
+
+def preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
+    """
+    Paths of a session's preprocessing outputs under outputDir (preprocScript.py's
+    output root), named by preprocNames. Naming only: nothing is checked on disk.
+
+    Returns a dict:
+        outputSesDir   {outputDir}/{subj}/ses-{ses}; afni_proc runs from here
+        meDir          results dir, {scriptId}
+        workDir        afni_proc -out_dir, {baseId}.delete; deleted by the cleanup
+        doneFile       out.ss_review in meDir, the evidence of completion
+        errts          AFNI prefix of the errts in meDir (no .HEAD/.BRIK)
+    """
     names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
-    return f"{outputDir}/{subj}/ses-{ses}/{names['scriptId']}/errts.{names['subjId']}.tproject+tlrc"
+    outputSesDir = f"{outputDir}/{subj}/ses-{ses}"
+    meDir = f"{outputSesDir}/{names['scriptId']}"
+    return {
+        'outputSesDir': outputSesDir,
+        'meDir': meDir,
+        'workDir': f"{outputSesDir}/{names['baseId']}.delete",
+        'doneFile': f"{meDir}/out.ss_review.{names['subjId']}.txt",
+        'errts': f"{meDir}/errts.{names['subjId']}.tproject+tlrc",
+    }
+
+
+def preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
+    """
+    Check one session's base-run outputs: what preprocScript.py's job leaves in
+    the results dir after afni_proc and its cleanup. Paths come from
+    preprocPaths; this only looks at what's on disk. preprocScript.py
+    skips a session that's 'done', paramScript.py starts the grid only from one
+    with no missingInputs, and pipelineCheck.py reports the same result.
+
+    Rules: the results dir holds out.ss_review (afni_proc's last output, so the
+    run finished), the errts (what peakScript.py reads), and the files
+    x07.blur_censor_param.csh rebuilds the grid from (kept by the cleanup's
+    preserve mv lines). A leftover working dir ({baseId}.delete) means a run
+    failed or is still going; it's only noted.
+
+    Returns a dict:
+        checks     list of (item, status, detail), in report order; status is
+                   'found', 'missing' or 'note' (not blocking), as rawSession
+        problems   'missing item (detail)' per missing check; empty = complete
+        done       out.ss_review is there (preprocScript's skip test)
+        missingInputs   x07 inputs not in the results dir
+    """
+    subjId = preprocNames(subj, ses, task, seqType, spaceTag, runTag)['subjId']
+    paths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+    meDir = paths['meDir']
+    out = {'checks': [], 'problems': [], 'done': False, 'missingInputs': []}
+
+    def check(item, status, detail=''):
+        out['checks'].append((item, status, detail))
+        if status in ('missing', 'bad'):
+            out['problems'].append(f"{status} {item} ({detail})" if detail else f"{status} {item}")
+
+    if not os.path.isdir(meDir):
+        check('results dir', 'missing', os.path.basename(meDir))
+    else:
+        out['done'] = os.path.exists(paths['doneFile'])
+        check('out.ss_review', 'found' if out['done'] else 'missing')
+
+        check('errts', 'found' if os.path.exists(f"{paths['errts']}.HEAD") else 'missing')
+
+        # What x07 reads from the results dir; it checks these too.
+        inputs = [f"pb04.{subjId}.r{run}.combine+tlrc.HEAD" for run in ('01', '02')] + [
+            f"mask_epi_anat.{subjId}+tlrc.HEAD",
+            "mask_WMe_resam+tlrc.HEAD",
+            "mask_CSFe_resam+tlrc.HEAD",
+            "dfile_rall.1D",
+            f"outcount_{subjId}_censor.1D",
+        ]
+        out['missingInputs'] = [f for f in inputs if not os.path.exists(f"{meDir}/{f}")]
+        if out['missingInputs']:
+            check('x07 inputs', 'missing',
+                  f"{len(out['missingInputs'])} of {len(inputs)}: {', '.join(out['missingInputs'])}")
+        else:
+            check('x07 inputs', 'found', f"{len(inputs)} files")
+
+    if os.path.isdir(paths['workDir']):
+        check('working dir', 'note', f"{os.path.basename(paths['workDir'])} left in place: run failed or still going")
+
+    return out
 
 
 class slurmScriptLogger:

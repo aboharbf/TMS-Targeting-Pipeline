@@ -9,7 +9,7 @@ skipped here and again inside f07, so re-running is safe.
 
 Variant naming matches f07 and utils.preprocNames: the variant run tag is the
 base run tag plus '-b{F}m{M}' ('.' -> 'p'), e.g. 'param' -> 'param-b4m0p3',
-so peakScript.py / fileCheck.py read a variant by that run tag.
+so peakScript.py reads a variant by that run tag.
 """
 
 import os
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import analysisConfig as cfg
 from utils import (slurmScriptLogger, spaceTagFromTemplate, preprocNames, errtsPrefix,
-                   variantTag, variantRunTag, snapshotConfig)
+                   variantTag, variantRunTag, snapshotConfig, preprocPaths, preprocSession)
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
@@ -107,29 +107,23 @@ for subj in subjVec:
             # Base run names
             names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
             scriptId = names['scriptId']
-            subjId = names['subjId']
 
-            outputSesDir = f"{outputDir}/{subj}/ses-{ses}"
-            meDir = f"{outputSesDir}/{scriptId}"            # Base results dir; f07's <resdir>.
-            doneFile = f"{meDir}/out.ss_review.{subjId}.txt"
+            paths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+            meDir = paths['meDir']                          # Base results dir; f07's <resdir>.
 
-            if not os.path.exists(doneFile):
-                print(f"{subj} ses-{ses} {seqType}: no finished base run ({doneFile}) - skipping")
+            # Base run outputs, checked by utils.preprocSession, the same rules
+            # pipelineCheck.py reports with.
+            pre = preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+
+            if not pre['done']:
+                print(f"{subj} ses-{ses} {seqType}: no finished base run ({paths['doneFile']}) - skipping")
                 nSkipped += 1
                 continue
 
             # Inputs f07 reads; it checks these too, but finding out here saves a queue wait.
-            needed = [f"pb04.{subjId}.r{run}.combine+tlrc.HEAD" for run in ('01', '02')] + [
-                f"mask_epi_anat.{subjId}+tlrc.HEAD",
-                "mask_WMe_resam+tlrc.HEAD",
-                "mask_CSFe_resam+tlrc.HEAD",
-                "dfile_rall.1D",
-                f"outcount_{subjId}_censor.1D",
-            ]
-            missing = [f for f in needed if not os.path.exists(f"{meDir}/{f}")]
-            if missing:
+            if pre['missingInputs']:
                 print(f"{subj} ses-{ses} {seqType}: base run lacks f07 inputs (run without the preserve mv lines?) - skipping")
-                for f in missing:
+                for f in pre['missingInputs']:
                     print(f"  {f}")
                 nSkipped += 1
                 continue

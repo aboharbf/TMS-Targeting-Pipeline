@@ -1,6 +1,6 @@
 """
 Analysis settings shared by preprocScript.py, paramScript.py, peakScript.py and
-fileCheck.py. Settings only, no logic: anything that defines the data, or must
+pipelineCheck.py. Settings only, no logic: anything that defines the data, or must
 agree between scripts, lives here. Per-script switches (dryRun, submit, maxJobs,
 scriptMode, ...) stay in each script.
 

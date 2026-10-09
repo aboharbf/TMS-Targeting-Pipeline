@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import analysisConfig as cfg
-from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames, snapshotConfig, rawT1, rawSession
+from utils import slurmScriptLogger, spaceTagFromTemplate, preprocNames, snapshotConfig, rawT1, rawSession, preprocPaths, preprocSession
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
@@ -35,7 +35,7 @@ tlrcBase = cfg.tlrcBase
 firstTRs = cfg.firstTRs
 spaceTag = spaceTagFromTemplate(tlrcBase)   # 'mni' for the MNI152_2009 template.
 
-# File/dir naming lives in utils.preprocNames:
+# File/dir naming lives in utils.preprocNames (and preprocPaths for the output dirs):
 #   job script  {scriptId}.job.sh      (slurmScriptDir)
 #   job logs    {scriptId}.job.o/.e    (slurmLogDir)
 #   proc script {scriptId}.proc.csh    (codeDir      = outputDir/{subj}/code)
@@ -74,18 +74,18 @@ for subj in subjVec:
 
         # Names
         names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
-        baseId = names['baseId']
         scriptId = names['scriptId']                    # Stem of the job script, logs, proc script, job name.
         subjId = names['subjId']                        # afni_proc -subj_id; names the files inside the results dir.
 
         # Script Outputs
         codeDir = f"{outputDir}/{subj}/code"            # Where the afni proc script ends up.
 
-        # Afni_proc outputs
-        outputSesDir = f"{outputDir}/{subj}/ses-{ses}"  # Output counterpart of sesDir.
-        outDir = f"{outputSesDir}/{baseId}.delete"      # Temporary dir, files moved, ends up deleted.
-        meDir = f"{outputSesDir}/{scriptId}"            # Where the useful things end up.
-        doneFile = f"{meDir}/out.ss_review.{subjId}.txt"    # Evidence of completion.
+        # Afni_proc outputs, named by utils.preprocPaths.
+        paths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+        outputSesDir = paths['outputSesDir']            # Output counterpart of sesDir.
+        outDir = paths['workDir']                       # Temporary dir, files moved, ends up deleted.
+        meDir = paths['meDir']                          # Where the useful things end up.
+        doneFile = paths['doneFile']                    # Evidence of completion.
 
         # Determine the session directory is there.
         if not os.path.isdir(sesDir):
@@ -93,8 +93,9 @@ for subj in subjVec:
             nSkipped += 1
             continue
 
-        # Check if things ran already
-        if os.path.exists(doneFile):
+        # Check if things ran already, by utils.preprocSession, the same rules
+        # pipelineCheck.py and paramScript.py use.
+        if preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag)['done']:
             print(f"{subj} ses-{ses}: already processed - skipping")
             nDone += 1
             continue
