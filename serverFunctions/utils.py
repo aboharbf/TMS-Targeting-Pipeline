@@ -385,6 +385,106 @@ def paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec,
     return out
 
 
+def corrPaths(resultsDir, subj, ses, task, seqType, runTag, tMask, cMask, sign='abs'):
+    """
+    Paths of corrScript.py's outputs for one run tag, sgACC mask, dlPFC mask and
+    peak sign, in resultsDir/{subj}. Naming only: nothing is checked on disk.
+
+    Scheme: {subj}.{ses}.{task}.{seqType}[.{runTag}].errts.targ.{tMask}.fisher[.{sign}].clust.ldlpfc.{cMask}
+    Sign 'abs' (peakScript.py's |z| search) has no sign field, so its names are
+    peakScript.py's; 'neg' and 'pos' add one after 'fisher'.
+    (mergeOutputs.py / extract_filename_variables parse these fields back.)
+
+    Returns a dict:
+        outDir     {resultsDir}/{subj}
+        avg        sgACC mean time series (3dmaskave); depends on tMask only
+        corr       whole-brain Fisher z map (3dTcorr1D); depends on tMask only
+        corrMask   corr masked to the dlPFC mask, for this sign (3dcalc)
+        clust      top cluster's peak, 'X Y Z z' or 'none' (3dclust), the final output
+    """
+    outDir = f"{resultsDir}/{subj}"
+    dataId = f"{subj}.{ses}.{task}.{seqType}" + (f".{runTag}" if runTag else '')
+    targ = f"{outDir}/{dataId}.errts.targ.{tMask}"
+    signSfx = '' if sign == 'abs' else f".{sign}"
+    return {
+        'outDir': outDir,
+        'avg': f"{targ}.1d",
+        'corr': f"{targ}.fisher.nii",
+        'corrMask': f"{targ}.fisher{signSfx}.clust.ldlpfc.{cMask}.nii",
+        'clust': f"{targ}.fisher{signSfx}.clust.ldlpfc.{cMask}.1d",
+    }
+
+
+def clustDone(path):
+    """
+    A 3dclust output counts as done when its first line is 'none' (no cluster
+    of that sign) or 4 fields, 'X Y Z z', holding a number. corrScript.py's job
+    makes the same test (its clustOk). peakScript.py's 3-field files are not done.
+    """
+    try:
+        with open(path) as fh:
+            first = fh.readline()
+    except OSError:
+        return False
+    fields = first.split()
+    return fields == ['none'] or (len(fields) == 4 and re.search(r'[0-9]', first) is not None)
+
+
+def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTagVec, maskTypeVec, clustMaskVec,
+                signVec):
+    """
+    Check one session's corrScript.py outputs over every run tag (the base run
+    and each grid variant). corrScript.py queues a session's 'todo' run tags,
+    and pipelineCheck.py can report the same result.
+
+    Rules: a run tag is done when every sgACC mask x dlPFC mask x peak sign has
+    a clust .1d that clustDone accepts. Otherwise it's todo if its errts .HEAD
+    is there (errtsPrefix), or notReady if not (preproc/param hasn't made it yet).
+    A clust .1d clustDone rejects (an empty one left by peakScript.py's tee when
+    3dclust failed, or one without the peak z) is 'bad', and its run tag todo.
+
+    Returns a dict:
+        checks     list of (item, status, detail), in report order; status is
+                   'found', 'missing', 'bad' or 'note', as rawSession
+        problems   'missing item (detail)' per missing/bad check; empty = complete
+        done       run tags with every output
+        todo       run tags with an errts but missing outputs, in runTagVec order
+        notReady   run tags missing outputs and the errts they're made from
+    """
+    nTag = len(runTagVec)
+    out = {'checks': [], 'problems': [], 'done': [], 'todo': [], 'notReady': []}
+
+    def check(item, status, detail=''):
+        out['checks'].append((item, status, detail))
+        if status in ('missing', 'bad'):
+            out['problems'].append(f"{status} {item} ({detail})" if detail else f"{status} {item}")
+
+    bad = []
+    for tag in runTagVec:
+        clustVec = [corrPaths(resultsDir, subj, ses, task, seqType, tag, tMask, cMask, sign)['clust']
+                    for tMask in maskTypeVec for cMask in clustMaskVec for sign in signVec]
+        if all(clustDone(f) for f in clustVec):
+            out['done'].append(tag)
+            continue
+        bad += [os.path.basename(f) for f in clustVec if os.path.exists(f) and not clustDone(f)]
+        if os.path.exists(f"{errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, tag)}.HEAD"):
+            out['todo'].append(tag)
+        else:
+            out['notReady'].append(tag)
+
+    if out['done']:
+        check('run tags', 'found', f"{len(out['done'])} of {nTag}")
+    if out['todo']:
+        check('run tags', 'missing', f"{len(out['todo'])} of {nTag}: {' '.join(out['todo'])}")
+    if out['notReady']:
+        check('run tags without errts', 'missing',
+              f"{len(out['notReady'])} of {nTag}: {' '.join(out['notReady'])}")
+    if bad:
+        check('clust outputs not X Y Z z or none', 'bad', ', '.join(bad))
+
+    return out
+
+
 class slurmScriptLogger:
     """
     A class to manage SLURM script generation and command logging.
@@ -510,6 +610,13 @@ def extract_filename_variables(filename):
     
     # Extract 1st and 2nd fields after another string (e.g., 'seed')
     # Change 'seed' to whatever string you need
+    # Peak sign: 'neg'/'pos' after 'fisher' (corrScript.py); no field = the |z| search, 'abs'.
+    result['sign'] = 'abs'
+    if 'fisher' in parts:
+        fisher_index = parts.index('fisher')
+        if fisher_index + 1 < len(parts) and parts[fisher_index + 1] in ('neg', 'pos'):
+            result['sign'] = parts[fisher_index + 1]
+
     search_string = 'clust'
     result['clustRegion'] = None
     result['clustMask'] = None
@@ -534,14 +641,16 @@ def extract_numbers_from_file(filepath):
         # Example: extract all numbers from file
         numbers = re.findall(r'[-+]?\d*\.?\d+', content)
 
-        # Return first 3 numbers (adjust as needed)
+        # X Y Z, then the peak's Fisher z (corrScript.py; peakScript.py wrote only X Y Z).
+        # A 'none' file (no cluster of that sign) has no numbers, so all are None.
         if len(numbers) >= 3:
             return {
                 'X': float(numbers[0]),
                 'Y': float(numbers[1]),
-                'Z': float(numbers[2])
+                'Z': float(numbers[2]),
+                'peakZ': float(numbers[3]) if len(numbers) >= 4 else None,
             }
-    return {'X': None, 'Y': None, 'Z': None}
+    return {'X': None, 'Y': None, 'Z': None, 'peakZ': None}
 
 def process_folder(folder_path):
     """

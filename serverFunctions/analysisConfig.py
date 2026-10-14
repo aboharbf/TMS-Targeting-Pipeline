@@ -1,6 +1,6 @@
 """
-Analysis settings shared by preprocScript.py, paramScript.py, peakScript.py and
-pipelineCheck.py. Settings only, no logic: anything that defines the data, or must
+Analysis settings shared by preprocScript.py, paramScript.py, peakScript.py,
+corrScript.py and pipelineCheck.py. Settings only, no logic: anything that defines the data, or must
 agree between scripts, lives here. Per-script switches (dryRun, submit, maxJobs,
 scriptMode, ...) stay in each script.
 
@@ -50,6 +50,15 @@ sgaccMaskTemplate = f"{maskDir}/subgenual_{{}}_mask.nii"
 maskTypeVec = ['seed', 'network']       # Anatomical vs. network based sgACC activity.
 clustMaskTemplate = f"{maskDir}/Parcels_MNI_222.resam.ldlpfc.neurosynth.{{}}.nii"
 clustMaskVec = ['orig', 'dilate_5', 'erode_1']
+# corrScript.py: the dlPFC peak is searched once per sign, each in its own masked map
+# (3dcalc -expr; a = Fisher z, b = dlPFC mask). Every map is >= 0, so 3dclust treats
+# them alike; the peak z saved for 'neg' is flipped back to negative.
+# 'abs' is peakScript.py's original |z| search, which mixes the two signs.
+peakSignExpr = {
+    'abs': 'abs(a*ispositive(b-.5))',
+    'neg': 'step(b-.5)*max(-a,0)',      # anticorrelation with sgACC
+    'pos': 'step(b-.5)*max(a,0)',       # positive correlation
+}
 
 # ------------------------------------------------------------ SLURM resources
 # Per job. Memory is the TOTAL for the job, not per CPU.
@@ -61,3 +70,8 @@ paramCpus = 2                           # --cpus-per-task and OMP_NUM_THREADS
 paramMem = '8G'                         # 3dpc holds both runs at once; peak ~4.5G per session (subject 001, 2026-10-05)
 paramTime = '12:00:00'                  # whole grid for all of a subject's sessions, run in turn;
                                         # 1:26 - 1:46 per session (subject 001), so ~7h for 4
+
+# corrScript.py. ESTIMATES, not yet measured: check with sacct after subject 001.
+corrCpus = 1                            # 3dmaskave/3dTcorr1D/3dcalc/3dclust; mostly reading the errts
+corrMem = '8G'                          # 3dTcorr1D loads the whole errts (both runs), about what 3dpc holds in x07
+corrTime = '08:00:00'                   # 4 sessions x 17 run tags; ~2-4 min per tag for the errts reads -> ~2.5-4.5h
