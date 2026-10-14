@@ -331,6 +331,60 @@ def preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
     return out
 
 
+def paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec, motVec):
+    """
+    Check one session's parameter grid outputs: the variant results dirs
+    x07.blur_censor_param.csh writes next to the base run's, one per fwhm x
+    motion limit, named by preprocPaths with variantRunTag. paramScript.py
+    queues a session's 'todo' variants, and pipelineCheck.py reports the same result.
+
+    Rules: a variant is done when its errts .HEAD is there (x07 renames it into
+    place last, and skips a variant that has one). A variant dir with no errts,
+    or a blur dir left in the base run's post/ (x07 deletes each once that
+    blur's errts are all done, unless keepPb06), means x07 failed or is still
+    going; both are only noted.
+
+    Returns a dict:
+        checks     list of (item, status, detail), in report order; status is
+                   'found', 'missing' or 'note' (not blocking), as rawSession
+        problems   'missing item (detail)' per missing check; empty = complete
+        todo       variantTag of each variant with no errts, in grid order
+    """
+    nVar = len(fwhmVec) * len(motVec)
+    out = {'checks': [], 'problems': [], 'todo': []}
+
+    def check(item, status, detail=''):
+        out['checks'].append((item, status, detail))
+        if status in ('missing', 'bad'):
+            out['problems'].append(f"{status} {item} ({detail})" if detail else f"{status} {item}")
+
+    partial = []
+    for fwhm in fwhmVec:
+        for mot in motVec:
+            varPaths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, variantRunTag(runTag, fwhm, mot))
+            if os.path.exists(f"{varPaths['errts']}.HEAD"):
+                continue
+            out['todo'].append(variantTag(fwhm, mot))
+            if os.path.isdir(varPaths['meDir']):
+                partial.append(variantTag(fwhm, mot))
+
+    nFound = nVar - len(out['todo'])
+    if nFound:
+        check('variants', 'found', f"{nFound} of {nVar}")
+    if out['todo']:
+        check('variants', 'missing',
+              f"all {nVar}" if not nFound else f"{len(out['todo'])} of {nVar}: {' '.join(out['todo'])}")
+    if partial:
+        check('variant dirs without errts', 'note', f"{' '.join(partial)}: x07 failed or still going")
+
+    postDir = f"{preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)['meDir']}/post"
+    blurDirs = sorted(os.path.basename(d) for d in glob.glob(f"{postDir}/b*") if os.path.isdir(d))
+    if blurDirs:
+        check('post blur dirs', 'note', f"{' '.join(blurDirs)} left in place: x07 failed, still going, or keepPb06 set")
+
+    return out
+
+
 class slurmScriptLogger:
     """
     A class to manage SLURM script generation and command logging.

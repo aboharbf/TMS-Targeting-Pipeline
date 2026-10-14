@@ -8,9 +8,13 @@ Stages so far:
     preproc   what preprocScript.py's job leaves in each session's results dir
               (out.ss_review, base errts, x07's inputs): utils.preprocSession.
               Covers the errts check fileCheck.py used to make.
+    param     paramScript.py's grid: each fwhm x motion variant's errts, from
+              x07.blur_censor_param.csh: utils.paramSession. A session missing
+              variants also notes when its base run isn't ready (paramScript
+              skips those).
 
 ============================== HOW TO ADD A STAGE ==============================
-(e.g. 'param': does each session have every grid variant's errts?)
+(e.g. 'peak': does each subject have peakScript.py's results?)
 
 1. Rules in utils.py, not here. Put the code that finds and checks the stage's
    files in a utils function, and have the script that makes or reads those
@@ -19,8 +23,8 @@ Stages so far:
    Have it return checks as (item, status, detail), status one of
    'found' / 'missing' / 'bad' / 'note', so describe() can turn them into a line.
 
-2. A check function in this file, next to checkPreproc():
-       def checkParam(subj):
+2. A check function in this file, next to checkParam():
+       def checkPeak(subj):
            lines = []        # report lines, one per session usually
            problems = []     # 'ses-XX: missing ...'; empty = subject complete
            for ses in sesVec:
@@ -29,13 +33,13 @@ Stages so far:
                problems += [f"ses-{ses}: {p}" for p in ...]
            return lines, problems
 
-3. Its report file, next to outputFilePreproc:
-       outputFileParam = 'fileCheck_param.txt'
+3. Its report file, next to outputFileParam:
+       outputFilePeak = 'fileCheck_peak.txt'
 
 4. One writeReport() call at the bottom, with a title and the settings the
    stage was checked against (they're written into the report's header):
-       writeReport(outputFileParam, "Parameter grid outputs",
-                   [("Output", outputDir), ("Run tag", runTag)], checkParam)
+       writeReport(outputFilePeak, "Peak search outputs",
+                   [("Results", resultsDir), ("Run tag", runTag)], checkPeak)
 
 writeReport() handles everything else: the header, the 'Checking subject N...'
 sections and the summary.
@@ -46,7 +50,7 @@ import os
 from datetime import datetime
 
 import analysisConfig as cfg
-from utils import snapshotConfig, spaceTagFromTemplate, rawT1, rawSession, preprocSession
+from utils import snapshotConfig, spaceTagFromTemplate, rawT1, rawSession, preprocSession, paramSession
 
 # Shared and analysis settings come from analysisConfig.py.
 snapshotConfig(cfg)
@@ -61,10 +65,13 @@ nEchoes = cfg.nEchoes
 runTag = cfg.runTag                     # Base run tag.
 seqType = 'me'                          # As preprocScript.py: its afni_proc command is multi-echo only.
 spaceTag = spaceTagFromTemplate(cfg.tlrcBase)
+fwhmVec = cfg.fwhmVec                   # paramScript.py's grid.
+motVec = cfg.motVec
 
 # Report files, in the current directory; overwritten each run.
 outputFileRaw = 'fileCheck_raw.txt'
 outputFilePreproc = 'fileCheck_preproc.txt'
+outputFileParam = 'fileCheck_param.txt'
 
 # Gather the full range of subjects present in the data directory.
 subjVec = [item for item in os.listdir(dataDir) if os.path.isdir(os.path.join(dataDir, item))]
@@ -160,6 +167,30 @@ def checkPreproc(subj):
     return lines, problems
 
 
+# ----------------------------------------------------- parameter grid outputs
+def checkParam(subj):
+    lines = []
+    problems = []
+
+    for ses in sesVec:
+        par = paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec, motVec)
+        checks = par['checks']
+
+        # Why variants are missing, when paramScript.py won't start them yet
+        # (its own skip tests, in its order).
+        if par['todo']:
+            pre = preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+            if not pre['done']:
+                checks = checks + [('base run', 'note', f"not finished, so paramScript skips it; see {outputFilePreproc}")]
+            elif pre['missingInputs']:
+                checks = checks + [('base run', 'note', f"lacks x07 inputs, so paramScript skips it; see {outputFilePreproc}")]
+
+        lines.append(f"ses-{ses}: {describe(checks)}")
+        problems += [f"ses-{ses}: {p}" for p in par['problems']]
+
+    return lines, problems
+
+
 writeReport(outputFileRaw, "Raw inputs for preprocScript.py", [
     ("Data", dataDir),
     ("Task", task),
@@ -175,3 +206,15 @@ writeReport(outputFilePreproc, "Base preprocessing outputs from preprocScript.py
     ("Space", spaceTag),
     ("Seq type", seqType),
 ], checkPreproc)
+
+writeReport(outputFileParam, "Parameter grid outputs from paramScript.py (x07.blur_censor_param.csh)", [
+    ("Output", outputDir),
+    ("Task", task),
+    ("Sessions", ' '.join(sesVec)),
+    ("Base run tag", runTag),
+    ("Space", spaceTag),
+    ("Seq type", seqType),
+    ("Blur FWHM", ' '.join(fwhmVec)),
+    ("Motion limits", ' '.join(motVec)),
+    ("Variants per session", len(fwhmVec) * len(motVec)),
+], checkParam)

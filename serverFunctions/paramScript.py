@@ -19,8 +19,8 @@ from datetime import datetime
 from pathlib import Path
 
 import analysisConfig as cfg
-from utils import (slurmScriptLogger, spaceTagFromTemplate, preprocNames, errtsPrefix,
-                   variantTag, variantRunTag, snapshotConfig, preprocPaths, preprocSession)
+from utils import (slurmScriptLogger, spaceTagFromTemplate, preprocNames, variantRunTag,
+                   snapshotConfig, preprocPaths, preprocSession, paramSession)
 
 # ------------------------------------------------------------------ dir paths
 projDir = Path("~").expanduser()
@@ -128,13 +128,9 @@ for subj in subjVec:
                 nSkipped += 1
                 continue
 
-            # Variants with no errts yet; the same check f07 makes.
-            todo = []
-            for fwhm in fwhmVec:
-                for mot in motVec:
-                    varErrts = errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, variantRunTag(runTag, fwhm, mot))
-                    if not os.path.exists(f"{varErrts}.HEAD"):
-                        todo.append(variantTag(fwhm, mot))
+            # Variants with no errts yet, checked by utils.paramSession: the same
+            # check f07 makes, and the one pipelineCheck.py reports with.
+            todo = paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec, motVec)['todo']
             if not todo:
                 print(f"{subj} ses-{ses} {seqType}: all {len(fwhmVec) * len(motVec)} variants done - skipping")
                 nDone += 1
