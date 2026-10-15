@@ -271,6 +271,49 @@ def preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
     }
 
 
+def headNvals(headPath):
+    """
+    Sub-brick count of an AFNI dataset (time points, for a time series), as
+    3dnvals reports it: DATASET_RANK[1] in its .HEAD. None if unreadable.
+    """
+    try:
+        with open(headPath) as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    match = re.search(r'name\s*=\s*DATASET_RANK\s+count\s*=\s*\d+\s+\d+\s+(\d+)', text)
+    return int(match.group(1)) if match else None
+
+
+def runLengths(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
+    """
+    TRs per run of a session's base run, as x07.blur_censor_param.csh counts
+    them (3dnvals of each pb04 in the results dir), or from out.ss_review's
+    'num TRs per run' line when the pb04 are gone.
+
+    Returns (lengths, source): lengths a list of ints in run order, or None if
+    neither can be read; source 'pb04', 'ss_review' or ''.
+    """
+    subjId = preprocNames(subj, ses, task, seqType, spaceTag, runTag)['subjId']
+    paths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag)
+
+    heads = sorted(glob.glob(f"{paths['meDir']}/pb04.{subjId}.r*.combine+tlrc.HEAD"))
+    lengths = [headNvals(h) for h in heads]
+    if lengths and None not in lengths:
+        return lengths, 'pb04'
+
+    # 'num TRs per run : 289 288'; the '(applied)' / '(censored)' lines don't match.
+    try:
+        with open(paths['doneFile']) as fh:
+            for line in fh:
+                match = re.match(r'\s*num TRs per run\s*:\s*(.+)', line)
+                if match:
+                    return [int(n) for n in match.group(1).split()], 'ss_review'
+    except (OSError, ValueError):
+        pass
+    return None, ''
+
+
 def preprocSession(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
     """
     Check one session's base-run outputs: what preprocScript.py's job leaves in
@@ -435,7 +478,7 @@ def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTa
     """
     Check one session's corrScript.py outputs over every run tag (the base run
     and each grid variant). corrScript.py queues a session's 'todo' run tags,
-    and pipelineCheck.py can report the same result.
+    and pipelineCheck.py reports the same result.
 
     Rules: a run tag is done when every sgACC mask x dlPFC mask x peak sign has
     a clust .1d that clustDone accepts. Otherwise it's todo if its errts .HEAD

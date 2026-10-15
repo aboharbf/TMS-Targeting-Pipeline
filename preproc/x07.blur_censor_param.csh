@@ -71,7 +71,6 @@ cd $resdir
 
 # ------------------------------------------------------------- input checks
 set runs  = (`count_afni -digits 2 1 2`)
-set nruns = $#runs
 set mask  = $resdir/mask_epi_anat.$subj+tlrc
 
 set missing = ()
@@ -90,6 +89,9 @@ if ( $#missing > 0 ) then
     exit 1
 endif
 
+# Per-run TR counts. The 1D files are split by these (-set_run_lengths) rather
+# than -set_nruns, which needs equal-length runs; afni_proc does the same in a
+# proc script whose runs differ in length (e.g. 289 + 288 = 577).
 set tr_counts = ()
 foreach run ( $runs )
     set tr_counts = ( $tr_counts `3dnvals pb04.$subj.r$run.combine+tlrc` )
@@ -104,13 +106,13 @@ set nonomatch
 # ------------------------------------------- motion regressors (fixed)
 # Same for every combination, so built once. Mimics lines 425 - 439.
 cd $postdir
-1d_tool.py -overwrite -infile $resdir/dfile_rall.1D -set_nruns $nruns \
+1d_tool.py -overwrite -infile $resdir/dfile_rall.1D -set_run_lengths $tr_counts \
            -demean -write motion_demean.1D
-1d_tool.py -overwrite -infile $resdir/dfile_rall.1D -set_nruns $nruns \
+1d_tool.py -overwrite -infile $resdir/dfile_rall.1D -set_run_lengths $tr_counts \
            -derivative -demean -write motion_deriv.1D
-1d_tool.py -overwrite -infile motion_demean.1D -set_nruns $nruns \
+1d_tool.py -overwrite -infile motion_demean.1D -set_run_lengths $tr_counts \
            -split_into_pad_runs mot_demean
-1d_tool.py -overwrite -infile motion_deriv.1D -set_nruns $nruns \
+1d_tool.py -overwrite -infile motion_deriv.1D -set_run_lengths $tr_counts \
            -split_into_pad_runs mot_deriv
 
 # Same -ortvec order as the proc script, so X columns line up with the base run.
@@ -140,7 +142,7 @@ foreach mot ( $mots )
 
     # create censor file motion_${subj}_censor.1D, for censoring motion
     # mimics lines 442 - 450 in the proc script
-    1d_tool.py -infile $resdir/dfile_rall.1D -set_nruns $nruns \
+    1d_tool.py -infile $resdir/dfile_rall.1D -set_run_lengths $tr_counts \
         -show_censor_count -censor_prev_TR                     \
         -censor_motion $mot motion_${subj}
 

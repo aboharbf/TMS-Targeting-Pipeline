@@ -15,7 +15,7 @@ z (negative for 'neg'; |z| for 'abs'), or 'none' when the map has no cluster of
 that sign. mergeOutputs.py reads these into X/Y/Z/peakZ, empty for 'none'.
 
 Run tags already done are skipped here (utils.corrSession, the same check
-pipelineCheck.py can report with), and each command is skipped in the job if
+pipelineCheck.py's corr report uses), and each command is skipped in the job if
 its output is there, so re-running is safe. A failed command is marked in both
 the .o and .e logs and fails the job at the end, but doesn't stop it: later
 masks, run tags and sessions still run.
