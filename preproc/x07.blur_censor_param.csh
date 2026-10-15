@@ -30,8 +30,12 @@
 # files (censor, ROI PCs, X matrices) that produced it.
 #
 # Intermediates go in {resdir}/post/. Rerunning skips finished work:
-#   censor branch  done when post/mot{M}/X.nocensor.xmat.1D exists
+#   censor branch  done when post/m{M}/X.nocensor.xmat.1D exists and
+#                  post/m{M}/run_lengths.txt matches the pb04 run lengths
 #   merge          done when the variant errts .HEAD exists
+# Each variant's out.post_params.txt records the run lengths too
+# ('run lengths: 289 288'); runLengthCheck.py uses it to tell variants made
+# before x07 split runs by their real lengths from ones made after.
 #
 # Validation: the variant with FWHM 4 / motion 0.3 should reproduce the base
 # run's errts. Compare (from the variant dir):
@@ -130,8 +134,14 @@ foreach mot ( $mots )
     set mtag = m`echo $mot | sed 's/\./p/g'`
     set cdir = $postdir/$mtag
 
-    if ( -f $cdir/X.nocensor.xmat.1D ) then
-        echo "censor branch $mtag: done - skipping"
+    # Done only if built with these run lengths (run_lengths.txt is written
+    # last); a dir without it predates -set_run_lengths and is rebuilt.
+    set cdone = 0
+    if ( -f $cdir/X.nocensor.xmat.1D && -f $cdir/run_lengths.txt ) then
+        if ( "`cat $cdir/run_lengths.txt`" == "$tr_counts" ) set cdone = 1
+    endif
+    if ( $cdone ) then
+        echo "censor branch ${mtag}: done - skipping"
         continue
     endif
 
@@ -199,6 +209,9 @@ foreach mot ( $mots )
 
     rm -f rm.*
 
+    # the run lengths this branch was built with; written last, as its done marker
+    echo $tr_counts > run_lengths.txt
+
     # Following this line in proc, 3dTproject runs, which is influenced both by censor and blur.
     # the above censor outputs are cheap to generate and store, so are kept here and used with the blur prep in the loop below.
 end
@@ -216,7 +229,7 @@ foreach fwhm ( $fwhms )
         if ( ! -f $vdir/errts.${subj}.tproject+tlrc.HEAD ) set todo = ( $todo $mot )
     end
     if ( $#todo == 0 ) then
-        echo "blur branch $btag: all errts done - skipping"
+        echo "blur branch ${btag}: all errts done - skipping"
         continue
     endif
 
@@ -269,6 +282,7 @@ foreach fwhm ( $fwhms )
         echo "base: $resdir"       >  out.post_params.txt
         echo "fwhm: $fwhm"         >> out.post_params.txt
         echo "motion limit: $mot"  >> out.post_params.txt
+        echo "run lengths: $tr_counts" >> out.post_params.txt
         echo "TRs kept: `1d_tool.py -infile censor_${subj}_combined_2.1D -show_trs_uncensored encoded`" \
                                    >> out.post_params.txt
         echo "created: `date`"     >> out.post_params.txt
