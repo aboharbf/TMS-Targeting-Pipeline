@@ -137,12 +137,15 @@ for subj in subjVec:
             if cor['notReady']:
                 print(f"{subj} ses-{ses} {seqType}: no errts yet for {len(cor['notReady'])} of "
                       f"{len(runTagVec)} run tags, leaving those for later: {' '.join(cor['notReady'])}")
+            if cor['skipped']:
+                print(f"{subj} ses-{ses} {seqType}: {len(cor['skipped'])} run tags skipped by x07 "
+                      f"(too few TRs after censoring): {' '.join(cor['skipped'])}")
 
             if not cor['todo']:
                 if cor['notReady']:
                     nNotReady += 1
                 else:
-                    print(f"{subj} ses-{ses} {seqType}: all {len(runTagVec)} run tags done - skipping")
+                    print(f"{subj} ses-{ses} {seqType}: all {len(runTagVec)} run tags done or skipped - skipping")
                     nDone += 1
                 continue
 

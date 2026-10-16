@@ -42,7 +42,7 @@ firstTRs = 4                            # -tcat_remove_first_trs
 # since x07 builds the same names from the same text.
 # fwhm '4' x motion '0.3' repeats the base run's settings: a check on x07.
 fwhmVec = ['0', '2', '4', '6']          # 3dBlurInMask -FWHM; '0' = no blur
-motVec = ['0', '0.15', '0.3', '0.45']   # 1d_tool.py -censor_motion limit
+motVec = ['0.15', '0.3', '0.45']        # 1d_tool.py -censor_motion limit (0 is not "off": it censors every TR that moved)
 
 # ---------------------------------------------------------------- peak search
 # peakScript.py. '{}' is filled with each entry of the list below it.

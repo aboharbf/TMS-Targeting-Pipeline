@@ -33,6 +33,13 @@
 #   censor branch  done when post/m{M}/X.nocensor.xmat.1D exists and
 #                  post/m{M}/run_lengths.txt matches the pb04 run lengths
 #   merge          done when the variant errts .HEAD exists
+#
+# Too few TRs: a motion limit that leaves a run fewer than minRunTRs
+# uncensored TRs, or leaves fewer TRs in all than regressors, can't be
+# regressed (3dTproject stops). Its censor branch is skipped, with the counts
+# in post/m{M}/skipped.txt, copied into each of its variant dirs as
+# out.post_skipped.txt in place of an errts; the rest of the grid goes on.
+# utils.paramSession counts such a variant as skipped, not todo.
 # Each variant's out.post_params.txt records the run lengths too
 # ('run lengths: 289 288'); runLengthCheck.py uses it to tell variants made
 # before x07 split runs by their real lengths from ones made after.
@@ -46,6 +53,7 @@
 
 # -------------------------------------------------------------- configuration
 set keepPb06 = 0        # 1 = keep each FWHM's blurred/scaled data after its errts are done
+set minRunTRs = 9       # fewest uncensored TRs a run may keep (3dTproject's MIN_RUN)
 
 # ------------------------------------------------------------------ arguments
 if ( $#argv != 3 ) then
@@ -136,12 +144,17 @@ foreach mot ( $mots )
 
     # Done only if built with these run lengths (run_lengths.txt is written
     # last); a dir without it predates -set_run_lengths and is rebuilt.
+    # Done includes skipped: too few TRs left, recorded in skipped.txt.
     set cdone = 0
-    if ( -f $cdir/X.nocensor.xmat.1D && -f $cdir/run_lengths.txt ) then
+    if ( ( -f $cdir/X.nocensor.xmat.1D || -f $cdir/skipped.txt ) && -f $cdir/run_lengths.txt ) then
         if ( "`cat $cdir/run_lengths.txt`" == "$tr_counts" ) set cdone = 1
     endif
     if ( $cdone ) then
-        echo "censor branch ${mtag}: done - skipping"
+        if ( -f $cdir/skipped.txt ) then
+            echo "censor branch ${mtag}: skipped before -" `grep '^skipped:' $cdir/skipped.txt`
+        else
+            echo "censor branch ${mtag}: done - skipping"
+        endif
         continue
     endif
 
@@ -162,11 +175,53 @@ foreach mot ( $mots )
 
     ## Intervening Code on proc script is for quality control/uneffected by blur + censoring parameterization.
 
-    # detrend, so principal components are not affected (Line 473)
+    # ---------------- enough TRs left? 3dTproject stops the script if not.
+    # It needs >= minRunTRs uncensored TRs in every run, and more TRs kept in
+    # all than fixed regressors. Count the final merge's, the larger set:
+    # X.nocensor (3 ROI PCs, then per run polort 3 + 2 x the motion columns)
+    # plus its own polort 0 per run.
+    set kept = ()
     foreach run ( $runs )
         1d_tool.py -set_run_lengths $tr_counts -select_runs $run              \
                    -infile censor_${subj}_combined_2.1D -write rm.censor.r$run.1D
+        set kept = ( $kept `awk '/^[ \t]*[0-9]/ {s += $1} END {print s+0}' rm.censor.r$run.1D` )
+    end
+    set ktotal = 0
+    foreach k ( $kept )
+        @ ktotal += $k
+    end
+    set nmot = `awk '/^[ \t]*[-0-9.]/ {print NF; exit}' $postdir/motion_demean.1D`
+    @ nreg = 2 * $nmot
+    @ nreg += 5
+    @ nreg *= $#runs
+    @ nreg += 3
 
+    set reason = ""
+    set i = 1
+    while ( $i <= $#runs )
+        if ( $kept[$i] < $minRunTRs ) set reason = "$reason run $runs[$i] keeps $kept[$i] of $tr_counts[$i] TRs (need $minRunTRs);"
+        @ i++
+    end
+    if ( $ktotal <= $nreg ) set reason = "$reason $ktotal TRs kept in all, need more than $nreg regressors;"
+
+    # Too few: record why, skip this motion limit, and go on with the rest of the
+    # grid. The blur branch copies skipped.txt into each of its variant dirs.
+    if ( "$reason" != "" ) then
+        echo "censor branch ${mtag}: SKIPPED - too few TRs after censoring:$reason"
+        echo "base: $resdir"               >  skipped.txt
+        echo "motion limit: $mot"          >> skipped.txt
+        echo "run lengths: $tr_counts"     >> skipped.txt
+        echo "TRs kept: $kept"             >> skipped.txt
+        echo "fixed regressors: $nreg"     >> skipped.txt
+        echo "skipped:$reason"             >> skipped.txt
+        echo "created: `date`"             >> skipped.txt
+        rm -f rm.*
+        echo $tr_counts > run_lengths.txt
+        continue
+    endif
+
+    # detrend, so principal components are not affected (Line 473)
+    foreach run ( $runs )
         # do not let censored time points affect detrending
         3dTproject -polort 3 -prefix rm.det_pcin_r$run                         \
                    -censor rm.censor.r$run.1D -cenmode KILL                    \
@@ -221,15 +276,23 @@ foreach fwhm ( $fwhms )
     set btag = b`echo $fwhm | sed 's/\./p/g'`
     set bdir = $postdir/$btag
 
-    # Variant dirs still missing an errts for this FWHM
+    # Variant dirs still missing an errts for this FWHM. A motion limit whose
+    # censor branch was skipped gets its skip record instead of an errts.
     set todo = ()
     foreach mot ( $mots )
         set mtag  = m`echo $mot | sed 's/\./p/g'`
         set vdir  = $sesdir/${baseId}${tagSep}${btag}${mtag}.${seqType}
+        if ( -f $postdir/$mtag/skipped.txt ) then
+            mkdir -p $vdir
+            cp $postdir/$mtag/skipped.txt $vdir/out.post_skipped.txt
+            echo "variant ${btag}${mtag}: SKIPPED - see $vdir/out.post_skipped.txt"
+            continue
+        endif
+        rm -f $vdir/out.post_skipped.txt        # stale, if the censor branch was rebuilt since
         if ( ! -f $vdir/errts.${subj}.tproject+tlrc.HEAD ) set todo = ( $todo $mot )
     end
     if ( $#todo == 0 ) then
-        echo "blur branch ${btag}: all errts done - skipping"
+        echo "blur branch ${btag}: no errts left to make - skipping"
         continue
     endif
 

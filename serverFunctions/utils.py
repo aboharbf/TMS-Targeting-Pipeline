@@ -258,6 +258,8 @@ def preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
         workDir        afni_proc -out_dir, {baseId}.delete; deleted by the cleanup
         doneFile       out.ss_review in meDir, the evidence of completion
         errts          AFNI prefix of the errts in meDir (no .HEAD/.BRIK)
+        skipFile       x07's record, in a grid variant's meDir, that it skipped
+                       the variant (too few TRs after censoring) and why
     """
     names = preprocNames(subj, ses, task, seqType, spaceTag, runTag)
     outputSesDir = f"{outputDir}/{subj}/ses-{ses}"
@@ -268,6 +270,7 @@ def preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, runTag=''):
         'workDir': f"{outputSesDir}/{names['baseId']}.delete",
         'doneFile': f"{meDir}/out.ss_review.{names['subjId']}.txt",
         'errts': f"{meDir}/errts.{names['subjId']}.tproject+tlrc",
+        'skipFile': f"{meDir}/out.post_skipped.txt",
     }
 
 
@@ -382,7 +385,9 @@ def paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec,
     queues a session's 'todo' variants, and pipelineCheck.py reports the same result.
 
     Rules: a variant is done when its errts .HEAD is there (x07 renames it into
-    place last, and skips a variant that has one). A variant dir with no errts,
+    place last, and skips a variant that has one). A variant with x07's skip
+    record (skipFile: too few TRs left after censoring) and no errts is
+    skipped: final, not todo, and only noted. A variant dir with neither,
     or a blur dir left in the base run's post/ (x07 deletes each once that
     blur's errts are all done, unless keepPb06), means x07 failed or is still
     going; both are only noted.
@@ -392,9 +397,10 @@ def paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec,
                    'found', 'missing' or 'note' (not blocking), as rawSession
         problems   'missing item (detail)' per missing check; empty = complete
         todo       variantTag of each variant with no errts, in grid order
+        skipped    variantTag of each variant x07 skipped, in grid order
     """
     nVar = len(fwhmVec) * len(motVec)
-    out = {'checks': [], 'problems': [], 'todo': []}
+    out = {'checks': [], 'problems': [], 'todo': [], 'skipped': []}
 
     def check(item, status, detail=''):
         out['checks'].append((item, status, detail))
@@ -407,16 +413,22 @@ def paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec,
             varPaths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, variantRunTag(runTag, fwhm, mot))
             if os.path.exists(f"{varPaths['errts']}.HEAD"):
                 continue
+            if os.path.exists(varPaths['skipFile']):
+                out['skipped'].append(variantTag(fwhm, mot))
+                continue
             out['todo'].append(variantTag(fwhm, mot))
             if os.path.isdir(varPaths['meDir']):
                 partial.append(variantTag(fwhm, mot))
 
-    nFound = nVar - len(out['todo'])
+    nFound = nVar - len(out['todo']) - len(out['skipped'])
     if nFound:
         check('variants', 'found', f"{nFound} of {nVar}")
     if out['todo']:
         check('variants', 'missing',
-              f"all {nVar}" if not nFound else f"{len(out['todo'])} of {nVar}: {' '.join(out['todo'])}")
+              f"all {nVar}" if len(out['todo']) == nVar else f"{len(out['todo'])} of {nVar}: {' '.join(out['todo'])}")
+    if out['skipped']:
+        check('variants skipped by x07', 'note',
+              f"{len(out['skipped'])} of {nVar}: {' '.join(out['skipped'])}: too few TRs after censoring, see out.post_skipped.txt")
     if partial:
         check('variant dirs without errts', 'note', f"{' '.join(partial)}: x07 failed or still going")
 
@@ -482,8 +494,9 @@ def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTa
 
     Rules: a run tag is done when every sgACC mask x dlPFC mask x peak sign has
     a clust .1d that clustDone accepts. Otherwise it's todo if its errts .HEAD
-    is there (errtsPrefix), or notReady if not (preproc/param hasn't made it yet).
-    A clust .1d clustDone rejects (an empty one left by peakScript.py's tee when
+    is there (errtsPrefix), skipped if not but x07 left its skip record (too few
+    TRs after censoring; there will never be one), or notReady if neither
+    (preproc/param hasn't made it yet). A clust .1d clustDone rejects (an empty one left by peakScript.py's tee when
     3dclust failed, or one without the peak z) is 'bad', and its run tag todo.
 
     Returns a dict:
@@ -493,9 +506,10 @@ def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTa
         done       run tags with every output
         todo       run tags with an errts but missing outputs, in runTagVec order
         notReady   run tags missing outputs and the errts they're made from
+        skipped    run tags x07 skipped, so with no errts to make outputs from
     """
     nTag = len(runTagVec)
-    out = {'checks': [], 'problems': [], 'done': [], 'todo': [], 'notReady': []}
+    out = {'checks': [], 'problems': [], 'done': [], 'todo': [], 'notReady': [], 'skipped': []}
 
     def check(item, status, detail=''):
         out['checks'].append((item, status, detail))
@@ -510,8 +524,11 @@ def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTa
             out['done'].append(tag)
             continue
         bad += [os.path.basename(f) for f in clustVec if os.path.exists(f) and not clustDone(f)]
-        if os.path.exists(f"{errtsPrefix(outputDir, subj, ses, task, seqType, spaceTag, tag)}.HEAD"):
+        paths = preprocPaths(outputDir, subj, ses, task, seqType, spaceTag, tag)
+        if os.path.exists(f"{paths['errts']}.HEAD"):
             out['todo'].append(tag)
+        elif os.path.exists(paths['skipFile']):
+            out['skipped'].append(tag)
         else:
             out['notReady'].append(tag)
 
@@ -522,6 +539,9 @@ def corrSession(outputDir, resultsDir, subj, ses, task, seqType, spaceTag, runTa
     if out['notReady']:
         check('run tags without errts', 'missing',
               f"{len(out['notReady'])} of {nTag}: {' '.join(out['notReady'])}")
+    if out['skipped']:
+        check('run tags skipped by x07', 'note',
+              f"{len(out['skipped'])} of {nTag}: {' '.join(out['skipped'])}: too few TRs after censoring")
     if bad:
         check('clust outputs not X Y Z z or none', 'bad', ', '.join(bad))
 

@@ -130,9 +130,13 @@ for subj in subjVec:
 
             # Variants with no errts yet, checked by utils.paramSession: the same
             # check f07 makes, and the one pipelineCheck.py reports with.
-            todo = paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec, motVec)['todo']
+            par = paramSession(outputDir, subj, ses, task, seqType, spaceTag, runTag, fwhmVec, motVec)
+            todo = par['todo']
+            if par['skipped']:
+                print(f"{subj} ses-{ses} {seqType}: {len(par['skipped'])} variants skipped by x07 "
+                      f"(too few TRs after censoring): {' '.join(par['skipped'])}")
             if not todo:
-                print(f"{subj} ses-{ses} {seqType}: all {len(fwhmVec) * len(motVec)} variants done - skipping")
+                print(f"{subj} ses-{ses} {seqType}: all {len(fwhmVec) * len(motVec)} variants done or skipped - skipping")
                 nDone += 1
                 continue
 
