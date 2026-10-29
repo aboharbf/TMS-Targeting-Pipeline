@@ -1,10 +1,192 @@
 import itertools
 
+import numpy as np
 import pandas as pd
 import ptitprince as pt # Only needed for raincloud plot
+from scipy.spatial.distance import pdist
 from scipy.stats import ttest_rel
 from statsmodels.stats.anova import AnovaRM
 
+
+SECTION = '=' * 90
+
+PAIRWISE_HEADER = (f"{'Comparison':<22} {'mean_diff':>10} {'SD_diff':>10} {'t':>10} "
+                   f"{'p_raw':>12} {'p_corr':>12} {'sig':>5}")
+
+
+def fmt_level(g):
+    """Level label for tables: strings as-is, numbers compactly (0.3, 4)."""
+    return g if isinstance(g, str) else f'{g:g}'
+
+
+# --- Distances ---
+
+def session_distance(g):
+    """Number of sessions and mean pairwise Euclidean distance between their X/Y/Z peaks."""
+    dists = pdist(g[['X', 'Y', 'Z']].values, metric='euclidean')
+    return pd.Series({'n_sessions': len(g),
+                      'mean_distance': round(dists.mean(), 2) if len(dists) else np.nan})
+
+
+def session_distances(df, grouping_vars):
+    """One row per grouping_vars cell with n_sessions and mean_distance."""
+    combodf = df.groupby(grouping_vars).apply(session_distance, include_groups=False).reset_index()
+    combodf['n_sessions'] = combodf['n_sessions'].astype(int)
+    return combodf
+
+
+def pairwise_distances(df, grouping_vars):
+    """Every session pair's Euclidean distance within each grouping_vars cell (long format)."""
+    rows = []
+    for keys, g in df.groupby(grouping_vars):
+        dists = pdist(g[['X', 'Y', 'Z']].values, metric='euclidean')
+        # pdist's condensed order matches itertools.combinations over the rows
+        for (i, j), d in zip(itertools.combinations(range(len(g)), 2), dists):
+            rows.append({**dict(zip(grouping_vars, keys)), 'session_i': i, 'session_j': j,
+                         'euclidean_distance': round(d, 2)})
+    return pd.DataFrame(rows)
+
+
+def complete_design(combodf, cell_vars):
+    """
+    Drop subjects AnovaRM can't use: fewer than 2 sessions in some cell (no distance to compute),
+    or missing cells (AnovaRM needs a full design).
+    """
+    singleSes = combodf.loc[combodf['n_sessions'] < 2, 'subject'].unique().tolist()
+    if singleSes:
+        print(f'Dropping {len(singleSes)} subjects with < 2 sessions in some cell: {singleSes}')
+        combodf = combodf[~combodf['subject'].isin(singleSes)]
+
+    nCells = combodf[cell_vars].drop_duplicates().shape[0]
+    cellsPerSubj = combodf.groupby('subject').size()
+    incomplete = cellsPerSubj[cellsPerSubj < nCells].index.tolist()
+    if incomplete:
+        print(f'Dropping {len(incomplete)} subjects with incomplete cells: {incomplete}')
+        combodf = combodf[~combodf['subject'].isin(incomplete)]
+
+    print(f"{combodf['subject'].nunique()} subjects x {nCells} cells")
+    return combodf.reset_index(drop=True)
+
+
+def subject_means(combodf, *vars):
+    """Average mean_distance over all other factors: one row per subject x level(s) of vars."""
+    return combodf.groupby(['subject', *vars], observed=True)['mean_distance'].mean().reset_index()
+
+
+# --- Tests ---
+
+def rm_test(data, var, groups):
+    """
+    One-way repeated measures test of mean_distance across levels of var (data has one row per subject x level).
+    Paired t-test for 2 levels, RM-ANOVA + Bonferroni-corrected paired t-tests for more.
+    'pairwise' holds every paired comparison (the t-test itself when there are 2 levels, k=1);
+    'comparisons' holds the brackets to plot.
+    """
+    data = data.sort_values('subject')
+    group_data = [data[data[var] == val]['mean_distance'].values for val in groups]
+    descriptives = [{'group': g, 'mean': v.mean(), 'sd': v.std(ddof=1), 'n': len(v)}
+                    for g, v in zip(groups, group_data)]
+
+    if len(groups) == 2:
+        test, stat_name = 'ttest', 't'
+        stat, p_val = ttest_rel(group_data[0], group_data[1])
+    else:
+        test, stat_name = 'anova', 'F'
+        res = AnovaRM(data=data, depvar='mean_distance', subject='subject', within=[var]).fit()
+        stat = res.anova_table['F Value'].values[0]
+        p_val = res.anova_table['Pr > F'].values[0]
+
+    # The paired t-statistic is mean_diff / (SD_diff / sqrt(n)), so a larger mean difference can still
+    # give a higher p-value when the difference varies more between subjects (larger SD_diff).
+    k = len(groups) * (len(groups) - 1) // 2
+    pairwise = []
+    for g1, g2 in itertools.combinations(range(len(groups)), 2):
+        diff = group_data[g1] - group_data[g2]
+        t_stat, p_raw = ttest_rel(group_data[g1], group_data[g2])
+        p_corr = min(p_raw * k, 1.0)
+        pairwise.append({
+            'group1': groups[g1], 'group2': groups[g2],
+            'meandiff': diff.mean(), 'sd_diff': diff.std(ddof=1), 'n': len(diff),
+            't_stat': t_stat, 'p_raw': p_raw, 'p_corrected': p_corr,
+            'reject': p_corr < 0.05,
+            'pos1': g1, 'pos2': g2,
+        })
+
+    # Brackets: a 2-level test is always shown (ns included); post-hocs only when significant, shortest first
+    shown = pairwise if test == 'ttest' else [r for r in pairwise if r['reject']]
+    comparisons = [{'group1': r['group1'], 'group2': r['group2'], 'pval': r['p_corrected'],
+                    'pos1': r['pos1'], 'pos2': r['pos2']} for r in shown]
+    comparisons.sort(key=lambda x: abs(x['pos2'] - x['pos1']))
+
+    return {'test': test, 'stat': stat, 'p_val': p_val, 'stat_name': stat_name, 'groups': groups,
+            'k': k, 'descriptives': descriptives, 'pairwise': pairwise, 'comparisons': comparisons}
+
+
+def rm_anova(data, within, label=None):
+    """Factorial RM-ANOVA of mean_distance; prints the table under label (if given) and returns anova_table."""
+    res = AnovaRM(data=data, depvar='mean_distance', subject='subject', within=within).fit()
+    if label:
+        print(label)
+        print('=' * 60)
+        print(res)
+    return res.anova_table
+
+
+# --- Reporting ---
+
+def format_pairwise(r):
+    """One row of the pairwise table, for printing and the stats file."""
+    sig = '*' if r['reject'] else ''
+    comparison = f"{fmt_level(r['group1'])} vs {fmt_level(r['group2'])}"
+    return (f"{comparison:<22} {r['meandiff']:>10.3f} {r['sd_diff']:>10.3f} {r['t_stat']:>10.3f} "
+            f"{r['p_raw']:>12.2e} {r['p_corrected']:>12.2e} {sig:>5}")
+
+
+def format_rm_test(result, label, descriptives=False):
+    """rm_test result as text: test statistic, optional group descriptives, pairwise table."""
+    testName = 'paired t-test' if result['test'] == 'ttest' else 'RM-ANOVA'
+    lines = [f"{label}: {testName}, {result['stat_name']}={result['stat']:.4f}, p={result['p_val']:.2e}"]
+
+    if descriptives:
+        lines.append('  Group descriptives:')
+        for d in result['descriptives']:
+            lines.append(f"    {fmt_level(d['group']):<12}: mean={d['mean']:.3f}, SD={d['sd']:.3f}, n={d['n']}")
+
+    if result['test'] == 'anova':
+        lines.append(f"  Post-hoc paired t-tests (Bonferroni corrected, k={result['k']}):")
+    else:
+        lines.append('  Paired comparison:')
+    lines.append('    ' + PAIRWISE_HEADER)
+    lines.append('    ' + '-' * len(PAIRWISE_HEADER))
+    lines += ['    ' + format_pairwise(r) for r in result['pairwise']]
+    return '\n'.join(lines)
+
+
+def print_rm_test(result, label, descriptives=False):
+    print(format_rm_test(result, label, descriptives))
+
+
+def write_rm_test(f, result, label):
+    f.write(format_rm_test(result, label, descriptives=True) + '\n\n')
+
+
+def write_anova_table(f, table, label):
+    """Full RM-ANOVA table plus a list of the significant effects."""
+    f.write(label + '\n')
+    f.write(SECTION + '\n\n')
+    f.write(table.to_string())
+    f.write('\n\n')
+    sig_effects = table[table['Pr > F'] < 0.05]
+    if len(sig_effects) > 0:
+        f.write('Significant effects (p < 0.05):\n')
+        for effect_name, row in sig_effects.iterrows():
+            f.write(f"  {effect_name}: F={row['F Value']:.4f}, p={row['Pr > F']:.2e}\n")
+    else:
+        f.write('No significant effects at p < 0.05.\n')
+    f.write('\n' + SECTION + '\n\n')
+
+
+# --- Plotting ---
 
 def plot_significance_brackets(ax, comparisons, y_min, y_max):
     """
@@ -67,69 +249,6 @@ def plot_significance_brackets(ax, comparisons, y_min, y_max):
     # Return adjusted y-limits to accommodate all brackets
     max_bracket_y = bracket_height_start + (len(comparisons) - 1) * bracket_spacing
     return (y_min - 0.05 * y_range, max_bracket_y + 0.10 * y_range)
-
-
-def rm_test(data, var, groups):
-    """
-    One-way repeated measures test of mean_distance across levels of var (data has one row per subject x level).
-    Paired t-test for 2 levels, RM-ANOVA + Bonferroni-corrected paired t-tests for more.
-    Returns a dict in the same layout as main.ipynb's stat_results entries, plus the full 'pairwise' list.
-    """
-    data = data.sort_values('subject')
-    group_data = [data[data[var] == val]['mean_distance'].values for val in groups]
-
-    if len(groups) == 2:
-        stat, p_val = ttest_rel(group_data[0], group_data[1])
-        return {'test': 'ttest', 'stat': stat, 'p_val': p_val, 'stat_name': 't', 'groups': groups,
-                'pairwise': [], 'comparisons': [{'group1': groups[0], 'group2': groups[1],
-                                                 'pval': p_val, 'pos1': 0, 'pos2': 1}]}
-
-    res = AnovaRM(data=data, depvar='mean_distance', subject='subject', within=[var]).fit()
-    stat = res.anova_table['F Value'].values[0]
-    p_val = res.anova_table['Pr > F'].values[0]
-
-    n_comparisons = len(groups) * (len(groups) - 1) // 2
-    pairwise_results = []
-    for g1, g2 in itertools.combinations(range(len(groups)), 2):
-        t_stat, t_pval = ttest_rel(group_data[g1], group_data[g2])
-        corrected_pval = min(t_pval * n_comparisons, 1.0)
-        pairwise_results.append({
-            'group1': groups[g1], 'group2': groups[g2],
-            'meandiff': group_data[g2].mean() - group_data[g1].mean(),
-            't_stat': t_stat, 'p_raw': t_pval, 'p_corrected': corrected_pval,
-            'reject': corrected_pval < 0.05,
-            'pos1': g1, 'pos2': g2,
-        })
-
-    # Significant comparisons for plotting, shortest bracket first
-    comparisons = [{'group1': r['group1'], 'group2': r['group2'], 'pval': r['p_corrected'],
-                    'pos1': r['pos1'], 'pos2': r['pos2']} for r in pairwise_results if r['reject']]
-    comparisons.sort(key=lambda x: abs(x['pos2'] - x['pos1']))
-
-    return {'test': 'anova', 'stat': stat, 'p_val': p_val, 'stat_name': 'F', 'groups': groups,
-            'pairwise': pairwise_results, 'comparisons': comparisons}
-
-
-def format_pairwise(r):
-    """One row of the post-hoc table, for printing and the stats file."""
-    sig = '*' if r['reject'] else ''
-    comparison = f"{r['group1']:g} vs {r['group2']:g}"
-    return (f"{comparison:<16} {r['meandiff']:>10.3f} {r['t_stat']:>10.3f} "
-            f"{r['p_raw']:>12.2e} {r['p_corrected']:>12.2e} {sig:>5}")
-
-
-PAIRWISE_HEADER = f"{'Comparison':<16} {'mean_diff':>10} {'t':>10} {'p_raw':>12} {'p_corr':>12} {'sig':>5}"
-
-
-def print_rm_test(result, label):
-    if result['test'] == 'ttest':
-        print(f"{label}: paired t-test, t={result['stat']:.3f}, p={result['p_val']:.2e}")
-        return
-    print(f"{label}: RM-ANOVA, F={result['stat']:.3f}, p={result['p_val']:.2e}")
-    print(f"  Post-hoc paired t-tests (Bonferroni corrected, k={len(result['pairwise'])}):")
-    print('    ' + PAIRWISE_HEADER)
-    for r in result['pairwise']:
-        print('    ' + format_pairwise(r))
 
 
 def raincloud(ax, data, var, order, names, result, title, ylabel='Mean Pairwise Distance (mm)'):
