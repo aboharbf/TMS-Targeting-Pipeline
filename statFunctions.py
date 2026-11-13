@@ -73,6 +73,125 @@ def subject_means(combodf, *vars):
     return combodf.groupby(['subject', *vars], observed=True)['mean_distance'].mean().reset_index()
 
 
+# --- Subject selection ---
+
+# Factors that define a cell in each dataset. Every included subject needs >= 2 sessions in every cell.
+BASE_CELL_VARS = ['target', 'clustMask', 'sequence_type']    # coordinatesAll_original.csv (main.ipynb)
+PARAM_CELL_VARS = ['fwhm', 'motion', 'target', 'clustMask']  # coordinatesAll_param.csv (main_paramGrid.ipynb)
+
+# Levels expected from x07.blur_censor_param.csh; checked against the param data after decoding.
+PARAM_GRID = {'fwhm': [0, 2, 4, 6], 'motion': [0.15, 0.3, 0.45]}
+
+SUBJECT_MODES = ('base_only', 'param_only', 'both')
+
+
+def prep_param(df, peak_sign='abs'):
+    """
+    Keep one peak sign and only the grid variants, decoding fwhm and motion from runTag
+    ('param-b4m0p3' -> fwhm 4, motion 0.3). The base 'param' run and untagged rows are dropped:
+    'param-b4m0p3' repeats the base run's settings, so keeping both would double that grid point.
+    """
+    df = df[df['sign'] == peak_sign].copy()
+    parsed = df['runTag'].str.extract(r'-b(?P<fwhm>\d+)m(?P<motion>\d+p\d+)$')
+    df['fwhm'] = parsed['fwhm'].astype(float)
+    df['motion'] = parsed['motion'].str.replace('p', '.').astype(float)
+
+    print('Rows dropped (not a grid variant):')
+    print(df.loc[df['fwhm'].isna(), 'runTag'].fillna('<untagged>').value_counts().to_string())
+    df = df[df['fwhm'].notna()].copy()
+
+    for var, expected in PARAM_GRID.items():
+        found = sorted(df[var].unique())
+        assert found == expected, f'{var} levels {found} do not match PARAM_GRID {expected}'
+    return df
+
+
+def drop_nan_subjects(df):
+    """Drop every subject with a missing X/Y/Z peak anywhere (peakZ is ignored: missing peaks also lack X/Y/Z)."""
+    nanSubj = sorted(df.loc[df[['X', 'Y', 'Z']].isna().any(axis=1), 'subject'].unique())
+    print(f'Subjects with NaNs - {len(nanSubj)}: {nanSubj}')
+    return df[~df['subject'].isin(nanSubj)]
+
+
+def drop_partial_sessions(df, cell_vars):
+    """
+    Drop sessions missing from some cell (e.g. a motion limit skipped for too few TRs),
+    so each of a subject's mean distances is built from the same sessions.
+    """
+    nCells = df[cell_vars].drop_duplicates().shape[0]
+    sesCells = df.drop_duplicates(['subject', 'session', *cell_vars]).groupby(['subject', 'session']).size()
+    partialSes = sesCells[sesCells < nCells]
+    print(f'Sessions missing cells ({nCells} expected): {"none" if partialSes.empty else ""}')
+    if len(partialSes):
+        print(partialSes.to_string())
+
+    dropIdx = pd.MultiIndex.from_frame(df[['subject', 'session']]).isin(partialSes.index)
+    if dropIdx.any():
+        print(f'Dropped {dropIdx.sum()} rows from those sessions')
+    return df[~dropIdx]
+
+
+def design_subjects(df, cell_vars):
+    """Subjects that pass complete_design, found from session counts so no distances are computed."""
+    counts = df.groupby(['subject', *cell_vars]).size().rename('n_sessions').reset_index()
+    return set(complete_design(counts, cell_vars)['subject'])
+
+
+def select_subjects(base_df, param_df, mode='both', peak_sign='abs', match_sessions=True):
+    """
+    Clean both coordinate datasets and keep the subjects that mode selects, so every analysis
+    in the paper can use the same subjects.
+
+    base_df:  coordinatesAll_original.csv (main.ipynb)
+    param_df: coordinatesAll_param.csv (main_paramGrid.ipynb)
+    Read both with dtype={'subject': str, 'session': str} so subject IDs match between the files.
+
+    Inclusion criteria, applied to each dataset separately:
+      base:  no NaN coordinates in any sequence; >= 2 sessions in every BASE_CELL_VARS cell.
+      param: peak_sign rows from the grid variants only (prep_param); no NaN coordinates; sessions
+             missing some grid cell are dropped (if match_sessions); >= 2 sessions in every PARAM_CELL_VARS cell.
+
+    mode chooses whose criteria define the subject list:
+      'base_only'  - pass the base criteria (main.ipynb's original filtering)
+      'param_only' - pass the param criteria (main_paramGrid.ipynb's original filtering)
+      'both'       - pass both, so main.ipynb and main_paramGrid.ipynb analyze the same subjects
+
+    Returns (base_df, param_df), each cleaned and limited to the kept subjects. A dataset is always
+    cleaned by its own criteria (its analysis needs a full design), so the other dataset's mode
+    has the same effect as 'both' (e.g. 'param_only' in main.ipynb).
+    """
+    if mode not in SUBJECT_MODES:
+        raise ValueError(f"mode must be one of {SUBJECT_MODES}, got '{mode}'")
+    for name, d in [('base_df', base_df), ('param_df', param_df)]:
+        if not pd.api.types.is_string_dtype(d['subject']):
+            raise TypeError(f"{name}['subject'] is not a string column: read the CSV with "
+                            f"dtype={{'subject': str, 'session': str}} so subject IDs match between files")
+
+    print('--- Base criteria (main.ipynb) ---')
+    base = drop_nan_subjects(base_df)
+    base = base[base['subject'].isin(design_subjects(base, BASE_CELL_VARS))]
+
+    print('\n--- Param criteria (main_paramGrid.ipynb) ---')
+    param = prep_param(param_df, peak_sign)
+    param = drop_nan_subjects(param)
+    if match_sessions:
+        param = drop_partial_sessions(param, PARAM_CELL_VARS)
+    param = param[param['subject'].isin(design_subjects(param, PARAM_CELL_VARS))]
+
+    baseSubj, paramSubj = set(base['subject']), set(param['subject'])
+    keep = {'base_only': baseSubj, 'param_only': paramSubj, 'both': baseSubj & paramSubj}[mode]
+
+    print('\n--- Subject selection ---')
+    print(f'Pass base criteria: {len(baseSubj)}, pass param criteria: {len(paramSubj)}, '
+          f'pass both: {len(baseSubj & paramSubj)}')
+    print(f'Pass base criteria only: {sorted(baseSubj - paramSubj)}')
+    print(f'Pass param criteria only: {sorted(paramSubj - baseSubj)}')
+    print(f"mode = '{mode}': {len(keep)} subjects kept")
+
+    return (base[base['subject'].isin(keep)].reset_index(drop=True),
+            param[param['subject'].isin(keep)].reset_index(drop=True))
+
+
 # --- Tests ---
 
 def rm_test(data, var, groups):
